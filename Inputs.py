@@ -9,11 +9,11 @@ import skimage
 import skimage.io
 import SimpleITK as sitk
 
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
+IMAGE_HEIGHT = 250
+IMAGE_WIDTH = 250
 IMAGE_DEPTH = 3
 
-NUM_CLASSES = 11
+NUM_CLASSES = 2
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 367
 NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 101
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1
@@ -65,8 +65,8 @@ def CamVid_reader_seq(filename_queue, seq_length):
   for im ,la in zip(image_seq_filenames, label_seq_filenames):
     imageValue = tf.read_file(tf.squeeze(im))
     labelValue = tf.read_file(tf.squeeze(la))
-    image_bytes = tf.image.decode_png(imageValue)
-    label_bytes = tf.image.decode_png(labelValue)
+    image_bytes = tf.image.decode_jpg(imageValue)
+    label_bytes = tf.image.decode_jpg(labelValue)
     image = tf.cast(tf.reshape(image_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH)), tf.float32)
     label = tf.cast(tf.reshape(label_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, 1)), tf.int64)
     image_seq.append(image)
@@ -81,8 +81,8 @@ def CamVid_reader(filename_queue):
   imageValue = tf.read_file(image_filename)
   labelValue = tf.read_file(label_filename)
 
-  image_bytes = tf.image.decode_png(imageValue)
-  label_bytes = tf.image.decode_png(labelValue)
+  image_bytes = tf.image.decode_jpg(imageValue)
+  label_bytes = tf.image.decode_jpg(labelValue)
 
   image = tf.reshape(image_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH))
   label = tf.reshape(label_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, 1))
@@ -120,7 +120,7 @@ def Miccai_reader_seq(filename_queue, seq_length):
 
 def get_filename_list_seq(path, seq_length):
   fd = open(path)
-  total_train_file = 367
+  # total_train_file = 367
   im_seq = []
   label_seq = []
   image_filenames = []
