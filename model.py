@@ -37,11 +37,11 @@ EVAL_BATCH_SIZE = 1
 BATCH_SIZE = 1
 READ_DATA_SIZE = 100
 # for CamVid
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
+IMAGE_HEIGHT = 250
+IMAGE_WIDTH = 250
 IMAGE_DEPTH = 3
 
-NUM_CLASSES = 11
+NUM_CLASSES = 2
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 367
 NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 101
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1
@@ -192,7 +192,7 @@ def loss(logits, labels):
       loss func without re-weighting
   """
   # Calculate the average cross entropy loss across the batch.
-  logits = tf.reshape(logits, (-1,NUM_CLASSES))
+  logits = tf.reshape(logits, (-1, NUM_CLASSES))
   labels = tf.reshape(labels, [-1])
 
   cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -381,7 +381,7 @@ def inference(images, labels, phase_train):
 
     # upsample1
     # upsample1 = upsample_with_pool_indices(conv_decode2, pool1_indices, conv_decode2.get_shape(), scale=2, name='upsample1')
-    upsample1= deconv_layer(conv_decode2, [2, 2, 64, 64], [batch_size, 360, 480, 64], 2, "up1")
+    upsample1= deconv_layer(conv_decode2, [2, 2, 64, 64], [batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 64], 2, "up1")
     # decode4
     conv_decode1 = conv_layer_with_bn(upsample1, [7, 7, 64, 64], phase_train, False, name="conv_decode1")
     """ end of Decode """
@@ -402,9 +402,9 @@ def inference(images, labels, phase_train):
     return loss, logit
 
 def train(total_loss, global_step):
-    batch_size = BATCH_SIZE
-    total_sample = 274
-    num_batches_per_epoch = 274/1
+    # batch_size = BATCH_SIZE
+    # total_sample = 274
+    # num_batches_per_epoch = 274/1
     """ fix lr """
     lr = INITIAL_LEARNING_RATE
     loss_averages_op = _add_loss_summaries(total_loss)
@@ -490,17 +490,17 @@ def eval_batches(data, sess, eval_prediction=None):
     return predictions
 
 def test():
-  checkpoint_dir = "/tmp4/first350/TensorFlow/Logs"
+  checkpoint_dir = "/tmp/segnet/TensorFlow/Logs"
   # testing should set BATCH_SIZE = 1
   batch_size = 1
 
-  image_filenames, label_filenames = get_filename_list("/tmp3/first350/SegNet-Tutorial/CamVid/test.txt")
+  image_filenames, label_filenames = get_filename_list("data/test.txt")
 
   test_data_node = tf.placeholder(
         tf.float32,
-        shape=[batch_size, 360, 480, 3])
+        shape=[batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH])
 
-  test_labels_node = tf.placeholder(tf.int64, shape=[batch_size, 360, 480, 1])
+  test_labels_node = tf.placeholder(tf.int64, shape=[batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 1])
 
   phase_train = tf.placeholder(tf.bool, name='phase_train')
 
@@ -517,7 +517,7 @@ def test():
 
   with tf.Session() as sess:
     # Load checkpoint
-    saver.restore(sess, "/tmp4/first350/TensorFlow/Logs/model.ckpt-" )
+    saver.restore(sess, "/tmp/segnet/TensorFlow/Logs/model.ckpt-" )
     images, labels = get_all_test_data(image_filenames, label_filenames)
     threads = tf.train.start_queue_runners(sess=sess)
     hist = np.zeros((NUM_CLASSES, NUM_CLASSES))
@@ -543,17 +543,17 @@ if __name__ == "__main__":
   exit()
   max_steps = 20000
   batch_size = BATCH_SIZE
-  train_dir = "/tmp4/first350/TensorFlow/Logs"
-  image_filenames, label_filenames = get_filename_list("/tmp3/first350/SegNet-Tutorial/CamVid/train.txt")
-  val_image_filenames, val_label_filenames = get_filename_list("/tmp3/first350/SegNet-Tutorial/CamVid/val.txt")
+  train_dir = "/tmp/segnet/TensorFlow/Logs"
+  image_filenames, label_filenames = get_filename_list("data/train.txt")
+  val_image_filenames, val_label_filenames = get_filename_list("data/validation.txt")
   with tf.device('/gpu:3'):
       with tf.Graph().as_default():
 
         train_data_node = tf.placeholder(
               tf.float32,
-              shape=[batch_size, 360, 480, 3])
+              shape=[batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH])
 
-        train_labels_node = tf.placeholder(tf.int64, shape=[batch_size, 360, 480, 1])
+        train_labels_node = tf.placeholder(tf.int64, shape=[batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 1])
 
         phase_train = tf.placeholder(tf.bool, name='phase_train')
 

@@ -66,8 +66,8 @@ EVAL_BATCH_SIZE = 1
 BATCH_SIZE = 1
 SEQUENCE_LENGTH = 3
 # for CamVid
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
+IMAGE_HEIGHT = 250
+IMAGE_WIDTH = 250
 # IMAGE_DEPTH = 3
 # for miccai
 IMAGE_DEPTH = 3
@@ -353,7 +353,7 @@ def decoder(inputT, phase_train, batch_size, reuse=False):
   conv_decode2 = conv_layer_with_bn(upsample2, [7, 7, 64, 64], phase_train, False, name="conv_decode2", reuse=reuse)
 
   # upsample1
-  upsample1= deconv_layer(conv_decode2, [2, 2, 64, 64], [batch_size, 360, 480, 64], 2, "up1", reuse=reuse)
+  upsample1= deconv_layer(conv_decode2, [2, 2, 64, 64], [batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 64], 2, "up1", reuse=reuse)
   # decode4
   conv_decode1 = conv_layer_with_bn(upsample1, [7, 7, 64, 64], phase_train, False, name="conv_decode1", reuse=reuse)
 
@@ -477,9 +477,9 @@ def inference(images, labels, phase_train):
   return loss, logit
 
 def train(total_loss, global_step):
-    batch_size = BATCH_SIZE
-    total_sample = 274
-    num_batches_per_epoch = 274/1
+    # batch_size = BATCH_SIZE
+    # total_sample = 274
+    # num_batches_per_epoch = 274/1
     """ fix lr """
     lr = INITIAL_LEARNING_RATE
     loss_averages_op = _add_loss_summaries(total_loss)
@@ -515,13 +515,13 @@ def seq_test():
   # testing should set BATCH_SIZE = 1
   batch_size = BATCH_SIZE
   seq_length = 3
-  image_filenames, label_filenames = get_filename_list("/tmp3/first350/SegNet-Tutorial/CamVid/test.txt")
+  image_filenames, label_filenames = get_filename_list("data/test.txt")
 
   test_data_node = tf.placeholder(
         tf.float32,
-        shape=[batch_size, seq_length, 360, 480, 3])
+        shape=[batch_size, seq_length, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH])
 
-  test_labels_node = tf.placeholder(tf.int64, shape=[batch_size, seq_length, 360, 480, 1])
+  test_labels_node = tf.placeholder(tf.int64, shape=[batch_size, seq_length, IMAGE_HEIGHT, IMAGE_WIDTH, 1])
 
   phase_train = tf.placeholder(tf.bool, name='phase_train')
 
@@ -538,7 +538,7 @@ def seq_test():
 
   with tf.Session() as sess:
     # Load checkpoint
-    saver.restore(sess, "/tmp3/first350/TensorFlow/Logs_seq/seq_model.ckpt-6000" )
+    saver.restore(sess, "/tmp/segnet/TensorFlow/Logs_seq/seq_model.ckpt-6000" )
     images, labels = get_all_test_data_seq(image_filenames, label_filenames, seq_length)
     # threads = tf.train.start_queue_runners(sess=sess)
     hist = np.zeros((NUM_CLASSES, NUM_CLASSES))
@@ -558,19 +558,19 @@ def seq_test():
     print("mean IU: ", np.nanmean(iu))
 
 def seq_main():
-  image_filenames, label_filenames = get_filename_list_seq("/tmp3/first350/SegNet-Tutorial/CamVid/train.txt", SEQUENCE_LENGTH)
-  val_image_filenames, val_label_filenames = get_filename_list_seq("/tmp3/first350/SegNet-Tutorial/CamVid/test.txt", SEQUENCE_LENGTH)
+  image_filenames, label_filenames = get_filename_list_seq("data/train.txt", SEQUENCE_LENGTH)
+  val_image_filenames, val_label_filenames = get_filename_list_seq("data/validation.txt", SEQUENCE_LENGTH)
   batch_size = BATCH_SIZE
   seq_length = SEQUENCE_LENGTH
   max_steps = 10000
-  train_dir = "/tmp3/first350/TensorFlow/Logs_seq"
+  train_dir = "/tmp/segnet/TensorFlow/Logs_seq"
   # ff = get_miccai_filename(seq_length)
   with tf.Graph().as_default():
     train_data_node = tf.placeholder(
           tf.float32,
-          shape=[batch_size, seq_length, 360, 480, 3])
+          shape=[batch_size, seq_length, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH])
 
-    train_labels_node = tf.placeholder(tf.int64, shape=[batch_size, seq_length, 360, 480, 1])
+    train_labels_node = tf.placeholder(tf.int64, shape=[batch_size, seq_length, IMAGE_HEIGHT, IMAGE_WIDTH, 1])
 
     phase_train = tf.placeholder(tf.bool, name='phase_train')
 
