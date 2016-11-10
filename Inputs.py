@@ -65,8 +65,8 @@ def CamVid_reader_seq(filename_queue, seq_length):
   for im ,la in zip(image_seq_filenames, label_seq_filenames):
     imageValue = tf.read_file(tf.squeeze(im))
     labelValue = tf.read_file(tf.squeeze(la))
-    image_bytes = tf.image.decode_jpg(imageValue)
-    label_bytes = tf.image.decode_jpg(labelValue)
+    image_bytes = tf.image.decode_jpeg(imageValue)
+    label_bytes = tf.image.decode_jpeg(labelValue)
     image = tf.cast(tf.reshape(image_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH)), tf.float32)
     label = tf.cast(tf.reshape(label_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, 1)), tf.int64)
     image_seq.append(image)
@@ -81,8 +81,8 @@ def CamVid_reader(filename_queue):
   imageValue = tf.read_file(image_filename)
   labelValue = tf.read_file(label_filename)
 
-  image_bytes = tf.image.decode_jpg(imageValue)
-  label_bytes = tf.image.decode_jpg(labelValue)
+  image_bytes = tf.image.decode_jpeg(imageValue)
+  label_bytes = tf.image.decode_jpeg(labelValue)
 
   image = tf.reshape(image_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH))
   label = tf.reshape(label_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, 1))
