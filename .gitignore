@@ -1,1 +1,3 @@
 .ipynb_checkpoints/*
+libs/__pycache__/
+figure*.jpg

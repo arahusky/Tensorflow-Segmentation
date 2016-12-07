@@ -75,14 +75,13 @@ def unpool_layer2x2_batch(bottom, argmax):
 
 
 class Network:
-    IMAGE_HEIGHT = 250
-    IMAGE_WIDTH = 250
+    IMAGE_HEIGHT = 28
+    IMAGE_WIDTH = 28
     IMAGE_CHANNELS = 1
 
     def __init__(self,
-                 n_filters=[1, 10],
-                 filter_sizes=[3, 3],
-                 corruption=False):
+                 n_filters=[1, 64, 128, 128, 256],
+                 filter_sizes=[2, 2, 3, 3]):
         """Build a deep denoising autoencoder w/ tied weights.
 
         Parameters
@@ -101,14 +100,14 @@ class Network:
         """
         # %%
         # input to the network
-        self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS], name='x')
-        self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='x')
+        self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS], name='inputs')
+        self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
 
+        self.is_training = tf.placeholder_with_default(False, [], name='is_training')
         current_input = self.inputs
 
         # Optionally apply denoising autoencoder
-        if corruption:
-            current_input = corrupt(current_input)
+        current_input = tf.cond(self.is_training, lambda: corrupt(current_input), lambda: current_input)
 
         # Build the encoder
         encoder = []
@@ -123,12 +122,14 @@ class Network:
             output = lrelu(tf.add(tf.nn.conv2d(current_input, W, strides=[1, 2, 2, 1], padding='SAME'), b))
             current_input = output
 
-        current_input, argmax_1 = tf.nn.max_pool_with_argmax(current_input, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
+        # current_input, argmax_1 = tf.nn.max_pool_with_argmax(current_input, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
 
         # store the latent representation
         # z = current_input
 
-        current_input = unpool_layer2x2_batch(current_input, argmax_1)
+        print("current input shape", current_input.get_shape())
+
+        # current_input = unpool_layer2x2_batch(current_input, argmax_1)
 
         encoder.reverse()
         shapes.reverse()
@@ -181,17 +182,17 @@ class Dataset:
 
         for train_file in train_files:
             input_image, target_image = train_file.strip().split(' ')
-            train_image = np.array(Image.open(input_image).convert('L'))  # .convert('L')) -> grayscale (1-channel)
+            train_image = np.array(Image.open(os.path.join(folder, input_image)).convert('L'))  # .convert('L')) -> grayscale (1-channel)
             train_image = np.multiply(train_image, 1.0 / 255)
             self.train_inputs.append(train_image)
-            self.train_targets.append(np.array(Image.open(target_image).convert('1')).astype(np.float32))  # .convert('1')) -> binary
+            self.train_targets.append(np.array(Image.open(os.path.join(folder, target_image)).convert('1')).astype(np.float32))  # .convert('1')) -> binary
 
         for test_file in test_files:
             input_image, target_image = test_file.strip().split(' ')
-            test_image = np.array(Image.open(input_image).convert('L'))
+            test_image = np.array(Image.open(os.path.join(folder, input_image)).convert('L'))
             test_image = np.multiply(test_image, 1.0 / 255)
             self.test_inputs.append(test_image)
-            self.test_targets.append(np.array(Image.open(target_image).convert('1')).astype(np.float32))
+            self.test_targets.append(np.array(Image.open(os.path.join(folder, target_image)).convert('1')).astype(np.float32))
 
         self.pointer = 0
 
@@ -243,7 +244,7 @@ def test_mnist():
 
         # Fit all training data
         batch_size = 100
-        n_epochs = 10
+        n_epochs = 20
         for epoch_i in range(n_epochs):
             dataset.reset_batch_pointer()
 
@@ -253,29 +254,29 @@ def test_mnist():
                 batch_inputs = np.reshape(batch_inputs, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                 batch_targets = np.reshape(batch_targets, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                 # train = np.array([img - mean_img for img in batch_inputs]).reshape((dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS))
-                cost, _ = sess.run([network.cost, network.train_op], feed_dict={network.inputs: batch_inputs, network.targets: batch_targets})
+                cost, _ = sess.run([network.cost, network.train_op], feed_dict={network.inputs: batch_inputs, network.targets: batch_targets, network.is_training: True})
                 end = time.time()
                 print('{}/{}, epoch: {}, cost: {}, batch time: {}'.format(epoch_i * dataset.num_batches_in_epoch() + batch_i,
                                                                           n_epochs * dataset.num_batches_in_epoch(),
                                                                           epoch_i, cost, end - start))
 
-            # Plot example reconstructions
-            n_examples = 10
-            test_inputs, test_targets = dataset.test_inputs[:n_examples], dataset.test_targets[:n_examples]
+        # Plot example reconstructions
+        n_examples = 20
+        test_inputs, test_targets = dataset.test_inputs[:n_examples], dataset.test_targets[:n_examples]
 
-            test_segmentation = sess.run(network.segmentation_result, feed_dict={network.inputs: np.reshape(test_inputs, [10, 250, 250, 1])})
-            fig, axs = plt.subplots(4, n_examples, figsize=(10, 2))
-            for example_i in range(n_examples):
-                axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
-                axs[1][example_i].imshow(test_targets[example_i], cmap='gray')
-                axs[2][example_i].imshow(test_segmentation[example_i], cmap='gray')
+        test_segmentation = sess.run(network.segmentation_result, feed_dict={network.inputs: np.reshape(test_inputs, [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
+        fig, axs = plt.subplots(4, n_examples, figsize=(n_examples, 2))
+        for example_i in range(n_examples):
+            axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
+            axs[1][example_i].imshow(test_targets[example_i], cmap='gray')
+            axs[2][example_i].imshow(np.reshape(test_segmentation[example_i], [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]), cmap='gray')
 
-                test_image_thresholded = np.array([0 if x < 0.5 else 1 for x in test_segmentation[example_i].flatten()])
-                axs[3][example_i].imshow(np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]), cmap='gray')
-            # fig.show()
-            # plt.draw()
+            test_image_thresholded = np.array([0 if x < 0.5 else 1 for x in test_segmentation[example_i].flatten()])
+            axs[3][example_i].imshow(np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]), cmap='gray')
+        # fig.show()
+        # plt.draw()
 
-            plt.savefig('figure{}.jpg'.format(batch_i + epoch_i * dataset.num_batches_in_epoch()))
+        plt.savefig('figure{}.jpg'.format(batch_i + epoch_i * dataset.num_batches_in_epoch()))
 
 
 if __name__ == '__main__':
