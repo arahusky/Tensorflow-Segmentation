@@ -2,12 +2,12 @@
 
 Parag K. Mital, Jan 2016
 """
-import io
 import math
 import os
 import time
 from math import ceil
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -15,6 +15,7 @@ from PIL import Image
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import gen_nn_ops
 
+from imgaug import augmenters as iaa
 from libs.activations import lrelu
 from libs.utils import corrupt
 
@@ -76,8 +77,8 @@ def unpool_layer2x2_batch(bottom, argmax):
 
 
 class Network:
-    IMAGE_HEIGHT = 28
-    IMAGE_WIDTH = 28
+    IMAGE_HEIGHT = 128
+    IMAGE_WIDTH = 128
     IMAGE_CHANNELS = 1
 
     def __init__(self,
@@ -116,7 +117,7 @@ class Network:
         for layer_index, output_channels in enumerate(n_filters[1:]):
             number_of_channels = current_input.get_shape().as_list()[3]
             shapes.append(current_input.get_shape().as_list())
-
+            print(current_input.get_shape().as_list())
             W = tf.get_variable('W' + str(layer_index), shape=(filter_sizes[layer_index], filter_sizes[layer_index], number_of_channels, output_channels))
             b = tf.Variable(tf.zeros([output_channels]))
             encoder.append(W)
@@ -162,11 +163,11 @@ class Network:
 
 
 class Dataset:
-    def __init__(self, folder='data28_28', batch_size=50):
+    def __init__(self, folder='data128_128', batch_size=50):
         self.batch_size = batch_size
 
-        train_files,validation_files,test_files = self.train_valid_test_split(os.listdir(os.path.join(folder, 'inputs')))
-        
+        train_files, validation_files, test_files = self.train_valid_test_split(os.listdir(os.path.join(folder, 'inputs')))
+
         self.train_inputs, self.train_targets = self.file_paths_to_images(folder, train_files)
         self.test_inputs, self.test_targets = self.file_paths_to_images(folder, test_files)
 
@@ -179,24 +180,24 @@ class Dataset:
         for file in files_list:
             input_image = os.path.join(folder, 'inputs', file)
             target_image = os.path.join(folder, 'targets', file)
-            
+
             test_image = np.array(Image.open(input_image).convert('L'))
-            test_image = np.multiply(test_image, 1.0 / 255)
-            
+            # test_image = np.multiply(test_image, 1.0 / 255)
+
             inputs.append(test_image)
             targets.append(np.array(Image.open(target_image).convert('1')).astype(np.float32))
 
-        return inputs, targets 
+        return inputs, targets
 
     def train_valid_test_split(self, X, ratio=None):
         if ratio is None:
             ratio = (0.7, .15, .15)
-        
+
         N = len(X)
         return (
-            X[:ceil(N * ratio[0])],
-            X[ceil(N * ratio[0]) : ceil(N * ratio[0] + N * ratio[1])],
-            X[ceil(N * ratio[0] + N * ratio[1]):]
+            X[:int(ceil(N * ratio[0]))],
+            X[int(ceil(N * ratio[0])): int(ceil(N * ratio[0] + N * ratio[1]))],
+            X[int(ceil(N * ratio[0] + N * ratio[1])):]
         )
 
     def num_batches_in_epoch(self):
@@ -240,6 +241,12 @@ def test_mnist():
     # mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
     # mean_img = np.mean(dataset.train_inputs)
 
+    seq = iaa.Sequential([
+        iaa.Crop(px=(0, 16)),  # crop images from each side by 0 to 16px (randomly chosen)
+        iaa.Fliplr(0.5),  # horizontally flip 50% of the images
+        iaa.GaussianBlur(sigma=(0, 2.0))  # blur images with a sigma of 0 to 3.0
+    ])
+
     network = Network()
 
     with tf.Session() as sess:
@@ -254,8 +261,15 @@ def test_mnist():
             for batch_i in range(dataset.num_batches_in_epoch()):
                 start = time.time()
                 batch_inputs, batch_targets = dataset.next_batch()
-                batch_inputs = np.reshape(batch_inputs, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                original = np.reshape(batch_inputs, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                 batch_targets = np.reshape(batch_targets, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+
+                batch_inputs = seq.augment_images(original)
+
+                for i in range(3):
+                    cv2.imshow('augmented', batch_inputs[i])
+                    cv2.imshow('original', original[i])
+                    cv2.waitKey(0)
                 # train = np.array([img - mean_img for img in batch_inputs]).reshape((dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS))
                 cost, _ = sess.run([network.cost, network.train_op], feed_dict={network.inputs: batch_inputs, network.targets: batch_targets, network.is_training: True})
                 end = time.time()
@@ -267,7 +281,8 @@ def test_mnist():
         n_examples = 20
         test_inputs, test_targets = dataset.test_inputs[:n_examples], dataset.test_targets[:n_examples]
 
-        test_segmentation = sess.run(network.segmentation_result, feed_dict={network.inputs: np.reshape(test_inputs, [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
+        test_segmentation = sess.run(network.segmentation_result,
+                                     feed_dict={network.inputs: np.reshape(test_inputs, [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
         fig, axs = plt.subplots(4, n_examples, figsize=(n_examples, 2))
         for example_i in range(n_examples):
             axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
