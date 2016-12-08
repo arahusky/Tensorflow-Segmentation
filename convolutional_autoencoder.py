@@ -188,15 +188,15 @@ class Dataset:
 
         return inputs, targets 
 
-    def train_valid_test_split(self, X, r=None):
-        if r is None:
-            r = (0.7, .15, .15) 
+    def train_valid_test_split(self, X, ratio=None):
+        if ratio is None:
+            ratio = (0.7, .15, .15)
         
         N = len(X)
         return (
-            X[:ceil(N*r[0])],
-            X[1+ceil(N*r[0]) : ceil(N*r[0]+N*r[1])],
-            X[1+ceil(N*r[0]+N*r[1]):]
+            X[:ceil(N * ratio[0])],
+            X[ceil(N * ratio[0]) : ceil(N * ratio[0] + N * ratio[1])],
+            X[ceil(N * ratio[0] + N * ratio[1]):]
         )
 
     def num_batches_in_epoch(self):
