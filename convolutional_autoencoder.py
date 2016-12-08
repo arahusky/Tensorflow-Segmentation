@@ -6,6 +6,7 @@ import io
 import math
 import os
 import time
+from math import ceil
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -164,37 +165,39 @@ class Dataset:
     def __init__(self, folder='data28_28', batch_size=50):
         self.batch_size = batch_size
 
-        self.train_inputs = []
-        self.train_targets = []
-        self.test_inputs = []
-        self.test_targets = []
-
-        train_files = []
-        test_files = []
-        with io.open(os.path.join(folder, 'train.txt'), 'r') as reader:
-            train_files += reader.readlines()
-
-        with io.open(os.path.join(folder, 'validation.txt'), 'r') as reader:
-            train_files += reader.readlines()
-
-        with io.open(os.path.join(folder, 'test.txt'), 'r') as reader:
-            test_files += reader.readlines()
-
-        for train_file in train_files:
-            input_image, target_image = train_file.strip().split(' ')
-            train_image = np.array(Image.open(os.path.join(folder, input_image)).convert('L'))  # .convert('L')) -> grayscale (1-channel)
-            train_image = np.multiply(train_image, 1.0 / 255)
-            self.train_inputs.append(train_image)
-            self.train_targets.append(np.array(Image.open(os.path.join(folder, target_image)).convert('1')).astype(np.float32))  # .convert('1')) -> binary
-
-        for test_file in test_files:
-            input_image, target_image = test_file.strip().split(' ')
-            test_image = np.array(Image.open(os.path.join(folder, input_image)).convert('L'))
-            test_image = np.multiply(test_image, 1.0 / 255)
-            self.test_inputs.append(test_image)
-            self.test_targets.append(np.array(Image.open(os.path.join(folder, target_image)).convert('1')).astype(np.float32))
+        train_files,validation_files,test_files = self.train_valid_test_split(os.listdir(os.path.join(folder, 'inputs')))
+        
+        self.train_inputs, self.train_targets = self.file_paths_to_images(folder, train_files)
+        self.test_inputs, self.test_targets = self.file_paths_to_images(folder, test_files)
 
         self.pointer = 0
+
+    def file_paths_to_images(self, folder, files_list):
+        inputs = []
+        targets = []
+
+        for file in files_list:
+            input_image = os.path.join(folder, 'inputs', file)
+            target_image = os.path.join(folder, 'targets', file)
+            
+            test_image = np.array(Image.open(input_image).convert('L'))
+            test_image = np.multiply(test_image, 1.0 / 255)
+            
+            inputs.append(test_image)
+            targets.append(np.array(Image.open(target_image).convert('1')).astype(np.float32))
+
+        return inputs, targets 
+
+    def train_valid_test_split(self, X, r=None):
+        if r is None:
+            r = (0.7, .15, .15) 
+        
+        N = len(X)
+        return (
+            X[:ceil(N*r[0])],
+            X[1+ceil(N*r[0]) : ceil(N*r[0]+N*r[1])],
+            X[1+ceil(N*r[0]+N*r[1]):]
+        )
 
     def num_batches_in_epoch(self):
         return int(math.floor(len(self.train_inputs) / self.batch_size))
