@@ -311,7 +311,7 @@ def train():
                                                                           epoch_i, cost, end - start))
 
                 if batch_num % 100 == 0:
-                    test_inputs, test_targets = dataset.next_batch()
+                    test_inputs, test_targets = dataset.test_set
                     test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_accuracy = sess.run(network.accuracy, feed_dict={network.inputs: test_inputs, network.targets: test_targets, network.is_training: False})
