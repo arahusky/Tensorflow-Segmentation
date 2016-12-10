@@ -15,6 +15,7 @@ from PIL import Image
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import gen_nn_ops
 
+from imgaug import imgaug
 from imgaug import augmenters as iaa
 from libs.activations import lrelu
 from libs.utils import corrupt
@@ -161,6 +162,11 @@ class Network:
 
         self.train_op = tf.train.AdamOptimizer().minimize(self.cost)
 
+        with tf.name_scope('accuracy'):
+            argmax_probs = tf.round(self.segmentation_result) # 0x1
+            correct_pred = tf.cast(tf.equal(argmax_probs, self.targets), tf.float32)
+            self.accuracy = tf.reduce_mean(correct_pred)
+
 
 class Dataset:
     def __init__(self, folder='data128_128', batch_size=50):
@@ -220,12 +226,14 @@ class Dataset:
 
         self.pointer += self.batch_size
 
-        return np.array(inputs), np.array(targets)
+        return np.array(inputs, dtype=np.uint8), np.array(targets, dtype=np.uint8)
+
+    @property
+    def test_set(self):
+        return np.array(self.test_inputs), np.array(self.test_targets)
 
 
-def test_mnist():
-    """Test the convolutional autoencder using MNIST."""
-    # %%
+def train():
 
     dataset = Dataset()
 
@@ -241,16 +249,36 @@ def test_mnist():
     # mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
     # mean_img = np.mean(dataset.train_inputs)
 
-    seq = iaa.Sequential([
-        iaa.Crop(px=(0, 16)),  # crop images from each side by 0 to 16px (randomly chosen)
-        iaa.Fliplr(0.5),  # horizontally flip 50% of the images
-        iaa.GaussianBlur(sigma=(0, 2.0))  # blur images with a sigma of 0 to 3.0
+    # augmentation_seq = iaa.Sequential([
+    #     iaa.Crop(px=(0, 16)),  # crop images from each side by 0 to 16px (randomly chosen)
+    #     iaa.Fliplr(0.5),  # horizontally flip 50% of the images
+    #     iaa.GaussianBlur(sigma=(0, 2.0))  # blur images with a sigma of 0 to 3.0
+    # ])
+
+    augmentation_seq = iaa.Sequential([
+        iaa.Crop(px=(0, 16), name="Cropper"),  # crop images from each side by 0 to 16px (randomly chosen)
+        iaa.Fliplr(0.5, name="Flipper"),
+        iaa.GaussianBlur((0, 3.0), name="GaussianBlur"),
+        iaa.Dropout(0.02, name="Dropout"),
+        iaa.AdditiveGaussianNoise(scale=0.01 * 255, name="GaussianNoise"),
+        iaa.Affine(translate_px={"x": (-40, 40)}, name="Affine")
     ])
+
+    # change the activated augmenters for binary masks,
+    # we only want to execute horizontal crop, flip and affine transformation
+    def activator_binmasks(images, augmenter, parents, default):
+        if augmenter.name in ["GaussianBlur", "Dropout", "GaussianNoise"]:
+            return False
+        else:
+            # default value for all other augmenters
+            return default
+
+    hooks_binmasks = imgaug.HooksImages(activator=activator_binmasks)
 
     network = Network()
 
     with tf.Session() as sess:
-        sess.run(tf.initialize_all_variables())
+        sess.run(tf.global_variables_initializer())
 
         # Fit all training data
         batch_size = 100
@@ -259,23 +287,36 @@ def test_mnist():
             dataset.reset_batch_pointer()
 
             for batch_i in range(dataset.num_batches_in_epoch()):
+                batch_num = epoch_i * dataset.num_batches_in_epoch() + batch_i
+
+                augmentation_seq_deterministic = augmentation_seq.to_deterministic()
+
                 start = time.time()
                 batch_inputs, batch_targets = dataset.next_batch()
-                original = np.reshape(batch_inputs, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                batch_inputs = np.reshape(batch_inputs, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                 batch_targets = np.reshape(batch_targets, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
 
-                batch_inputs = seq.augment_images(original)
+                batch_inputs = augmentation_seq_deterministic.augment_images(batch_inputs)
+                batch_targets = augmentation_seq_deterministic.augment_images(batch_targets, hooks=hooks_binmasks)
 
-                for i in range(3):
-                    cv2.imshow('augmented', batch_inputs[i])
-                    cv2.imshow('original', original[i])
-                    cv2.waitKey(0)
+                # for i in range(3):
+                #     cv2.imshow('augmented', batch_inputs[i])
+                #     cv2.imshow('target', batch_targets[i] * 255)
+                #     cv2.waitKey(0)
                 # train = np.array([img - mean_img for img in batch_inputs]).reshape((dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS))
                 cost, _ = sess.run([network.cost, network.train_op], feed_dict={network.inputs: batch_inputs, network.targets: batch_targets, network.is_training: True})
                 end = time.time()
-                print('{}/{}, epoch: {}, cost: {}, batch time: {}'.format(epoch_i * dataset.num_batches_in_epoch() + batch_i,
+                print('{}/{}, epoch: {}, cost: {}, batch time: {}'.format(batch_num,
                                                                           n_epochs * dataset.num_batches_in_epoch(),
                                                                           epoch_i, cost, end - start))
+
+                if batch_num % 100 == 0:
+                    test_inputs, test_targets = dataset.next_batch()
+                    test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                    test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                    test_accuracy = sess.run(network.accuracy, feed_dict={network.inputs: test_inputs, network.targets: test_targets, network.is_training: False})
+
+                    print('Step {}, test accuracy: {}'.format(batch_num, test_accuracy))
 
         # Plot example reconstructions
         n_examples = 20
@@ -289,7 +330,7 @@ def test_mnist():
             axs[1][example_i].imshow(test_targets[example_i], cmap='gray')
             axs[2][example_i].imshow(np.reshape(test_segmentation[example_i], [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]), cmap='gray')
 
-            test_image_thresholded = np.array([0 if x < 0.5 else 1 for x in test_segmentation[example_i].flatten()])
+            test_image_thresholded = np.array([0 if x < 0.5 else 255 for x in test_segmentation[example_i].flatten()])
             axs[3][example_i].imshow(np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]), cmap='gray')
         # fig.show()
         # plt.draw()
@@ -298,4 +339,4 @@ def test_mnist():
 
 
 if __name__ == '__main__':
-    test_mnist()
+    train()
