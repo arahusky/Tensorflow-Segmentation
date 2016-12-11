@@ -169,8 +169,9 @@ class Network:
 
 
 class Dataset:
-    def __init__(self, folder='data128_128', batch_size=50):
+    def __init__(self, folder='data128_128', batch_size=50, include_hair=False):
         self.batch_size = batch_size
+        self.include_hair = include_hair
 
         train_files, validation_files, test_files = self.train_valid_test_split(
             os.listdir(os.path.join(folder, 'inputs')))
@@ -186,7 +187,7 @@ class Dataset:
 
         for file in files_list:
             input_image = os.path.join(folder, 'inputs', file)
-            target_image = os.path.join(folder, 'targets', file)
+            target_image = os.path.join(folder, 'targets' if self.include_hair else 'targets_face_only', file)
 
             test_image = np.array(cv2.imread(input_image, 0))  # load grayscale
             # test_image = np.multiply(test_image, 1.0 / 255)
@@ -237,7 +238,7 @@ class Dataset:
 
 
 def train():
-    dataset = Dataset()
+    dataset = Dataset(folder='data{}_{}'.format(Network.IMAGE_HEIGHT, Network.IMAGE_WIDTH), include_hair=False)
 
     inputs, targets = dataset.next_batch()
     print(inputs.shape, targets.shape)
@@ -263,7 +264,7 @@ def train():
         iaa.GaussianBlur((0, 3.0), name="GaussianBlur"),
         iaa.Dropout(0.02, name="Dropout"),
         iaa.AdditiveGaussianNoise(scale=0.01 * 255, name="GaussianNoise"),
-        iaa.Affine(translate_px={"x": (-40, 40)}, name="Affine")
+        iaa.Affine(translate_px={"x": (-Network.IMAGE_HEIGHT//3, Network.IMAGE_WIDTH//3)}, name="Affine")
     ])
 
     # change the activated augmenters for binary masks,
