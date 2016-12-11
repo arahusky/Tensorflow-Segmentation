@@ -15,6 +15,8 @@ from imgaug import imgaug
 from libs.activations import lrelu
 from libs.utils import corrupt
 
+from network2 import Network2
+
 np.set_printoptions(threshold=np.nan)
 
 
@@ -279,12 +281,13 @@ def train():
     hooks_binmasks = imgaug.HooksImages(activator=activator_binmasks)
 
     network = Network()
+    #network = Network2()
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
         # Fit all training data
-        n_epochs = 1
+        n_epochs = 10
         for epoch_i in range(n_epochs):
             dataset.reset_batch_pointer()
 
