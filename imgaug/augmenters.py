@@ -8,8 +8,8 @@ import math
 from scipy import misc, ndimage
 from skimage import transform as tf
 import itertools
-import imgaug as ia
-from parameters import StochasticParameter, Deterministic, Binomial, Choice, DiscreteUniform, Normal, Uniform
+import imgaug.imgaug as ia
+from .parameters import StochasticParameter, Deterministic, Binomial, Choice, DiscreteUniform, Normal, Uniform
 
 try:
     xrange

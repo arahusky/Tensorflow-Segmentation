@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 from abc import ABCMeta, abstractmethod
 import numpy as np
-import imgaug as ia
+import imgaug.imgaug as ia
 import copy as copy_module
 
 try:
