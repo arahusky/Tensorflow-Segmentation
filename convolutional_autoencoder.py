@@ -1,7 +1,3 @@
-"""Tutorial on how to create a convolutional autoencoder w/ Tensorflow.
-
-Parag K. Mital, Jan 2016
-"""
 import math
 import os
 import time
@@ -11,12 +7,11 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from PIL import Image
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import gen_nn_ops
 
-from imgaug import imgaug
 from imgaug import augmenters as iaa
+from imgaug import imgaug
 from libs.activations import lrelu
 from libs.utils import corrupt
 
@@ -103,7 +98,8 @@ class Network:
         """
         # %%
         # input to the network
-        self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS], name='inputs')
+        self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
+                                     name='inputs')
         self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
 
         self.is_training = tf.placeholder_with_default(False, [], name='is_training')
@@ -119,7 +115,8 @@ class Network:
             number_of_channels = current_input.get_shape().as_list()[3]
             shapes.append(current_input.get_shape().as_list())
             print(current_input.get_shape().as_list())
-            W = tf.get_variable('W' + str(layer_index), shape=(filter_sizes[layer_index], filter_sizes[layer_index], number_of_channels, output_channels))
+            W = tf.get_variable('W' + str(layer_index), shape=(
+                filter_sizes[layer_index], filter_sizes[layer_index], number_of_channels, output_channels))
             b = tf.Variable(tf.zeros([output_channels]))
             encoder.append(W)
             output = lrelu(tf.add(tf.nn.conv2d(current_input, W, strides=[1, 2, 2, 1], padding='SAME'), b))
@@ -163,7 +160,7 @@ class Network:
         self.train_op = tf.train.AdamOptimizer().minimize(self.cost)
 
         with tf.name_scope('accuracy'):
-            argmax_probs = tf.round(self.segmentation_result) # 0x1
+            argmax_probs = tf.round(self.segmentation_result)  # 0x1
             correct_pred = tf.cast(tf.equal(argmax_probs, self.targets), tf.float32)
             self.accuracy = tf.reduce_mean(correct_pred)
 
@@ -172,14 +169,15 @@ class Dataset:
     def __init__(self, folder='data128_128', batch_size=50):
         self.batch_size = batch_size
 
-        train_files, validation_files, test_files = self.train_valid_test_split(os.listdir(os.path.join(folder, 'inputs')))
+        train_files, validation_files, test_files = self.train_valid_test_split(
+            os.listdir(os.path.join(folder, 'inputs')))
 
         self.train_inputs, self.train_targets = self.file_paths_to_images(folder, train_files)
-        self.test_inputs, self.test_targets = self.file_paths_to_images(folder, test_files)
+        self.test_inputs, self.test_targets = self.file_paths_to_images(folder, test_files, True)
 
         self.pointer = 0
 
-    def file_paths_to_images(self, folder, files_list):
+    def file_paths_to_images(self, folder, files_list, verbose=False):
         inputs = []
         targets = []
 
@@ -187,11 +185,13 @@ class Dataset:
             input_image = os.path.join(folder, 'inputs', file)
             target_image = os.path.join(folder, 'targets', file)
 
-            test_image = np.array(Image.open(input_image).convert('L'))
+            test_image = np.array(cv2.imread(input_image, 0))  # load grayscale
             # test_image = np.multiply(test_image, 1.0 / 255)
-
             inputs.append(test_image)
-            targets.append(np.array(Image.open(target_image).convert('1')).astype(np.float32))
+
+            target_image = cv2.imread(target_image, 0)
+            target_image = cv2.threshold(target_image, 127, 1, cv2.THRESH_BINARY)[1]
+            targets.append(target_image)
 
         return inputs, targets
 
@@ -230,11 +230,10 @@ class Dataset:
 
     @property
     def test_set(self):
-        return np.array(self.test_inputs), np.array(self.test_targets)
+        return np.array(self.test_inputs, dtype=np.uint8), np.array(self.test_targets, dtype=np.uint8)
 
 
 def train():
-
     dataset = Dataset()
 
     inputs, targets = dataset.next_batch()
@@ -293,18 +292,26 @@ def train():
 
                 start = time.time()
                 batch_inputs, batch_targets = dataset.next_batch()
-                batch_inputs = np.reshape(batch_inputs, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
-                batch_targets = np.reshape(batch_targets, (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                batch_inputs = np.reshape(batch_inputs,
+                                          (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                batch_targets = np.reshape(batch_targets,
+                                           (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
 
                 batch_inputs = augmentation_seq_deterministic.augment_images(batch_inputs)
+                batch_inputs = np.multiply(batch_inputs, 1.0 / 255)
+
                 batch_targets = augmentation_seq_deterministic.augment_images(batch_targets, hooks=hooks_binmasks)
 
+                # print(batch_inputs.dtype)
+                # print(batch_targets.dtype)
                 # for i in range(3):
                 #     cv2.imshow('augmented', batch_inputs[i])
-                #     cv2.imshow('target', batch_targets[i] * 255)
+                #     cv2.imshow('target', batch_targets[i].astype(np.float32))
                 #     cv2.waitKey(0)
                 # train = np.array([img - mean_img for img in batch_inputs]).reshape((dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS))
-                cost, _ = sess.run([network.cost, network.train_op], feed_dict={network.inputs: batch_inputs, network.targets: batch_targets, network.is_training: True})
+                cost, _ = sess.run([network.cost, network.train_op],
+                                   feed_dict={network.inputs: batch_inputs, network.targets: batch_targets,
+                                              network.is_training: True})
                 end = time.time()
                 print('{}/{}, epoch: {}, cost: {}, batch time: {}'.format(batch_num,
                                                                           n_epochs * dataset.num_batches_in_epoch(),
@@ -314,28 +321,38 @@ def train():
                     test_inputs, test_targets = dataset.test_set
                     test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
-                    test_accuracy = sess.run(network.accuracy, feed_dict={network.inputs: test_inputs, network.targets: test_targets, network.is_training: False})
+                    test_accuracy = sess.run(network.accuracy,
+                                             feed_dict={network.inputs: test_inputs, network.targets: test_targets,
+                                                        network.is_training: False})
 
                     print('Step {}, test accuracy: {}'.format(batch_num, test_accuracy))
 
-        # Plot example reconstructions
-        n_examples = 20
-        test_inputs, test_targets = dataset.test_inputs[:n_examples], dataset.test_targets[:n_examples]
+                    # Plot example reconstructions
+                    n_examples = 20
+                    test_inputs, test_targets = dataset.test_inputs[:n_examples], dataset.test_targets[:n_examples]
+                    test_inputs = np.multiply(test_inputs, 1.0 / 255)
 
-        test_segmentation = sess.run(network.segmentation_result,
-                                     feed_dict={network.inputs: np.reshape(test_inputs, [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
-        fig, axs = plt.subplots(4, n_examples, figsize=(n_examples, 2))
-        for example_i in range(n_examples):
-            axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
-            axs[1][example_i].imshow(test_targets[example_i], cmap='gray')
-            axs[2][example_i].imshow(np.reshape(test_segmentation[example_i], [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]), cmap='gray')
+                    test_segmentation = sess.run(network.segmentation_result, feed_dict={
+                        network.inputs: np.reshape(test_inputs,
+                                                   [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
 
-            test_image_thresholded = np.array([0 if x < 0.5 else 255 for x in test_segmentation[example_i].flatten()])
-            axs[3][example_i].imshow(np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]), cmap='gray')
-        # fig.show()
-        # plt.draw()
+                    fig, axs = plt.subplots(4, n_examples, figsize=(n_examples, 2))
+                    for example_i in range(n_examples):
+                        axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
+                        axs[1][example_i].imshow(test_targets[example_i].astype(np.float32), cmap='gray')
+                        axs[2][example_i].imshow(
+                            np.reshape(test_segmentation[example_i], [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
+                            cmap='gray')
 
-        plt.savefig('figure{}.jpg'.format(batch_i + epoch_i * dataset.num_batches_in_epoch()))
+                        test_image_thresholded = np.array(
+                            [0 if x < 0.5 else 255 for x in test_segmentation[example_i].flatten()])
+                        axs[3][example_i].imshow(
+                            np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
+                            cmap='gray')
+                        # fig.show()
+                        # plt.draw()
+
+                    plt.savefig('figure{}.jpg'.format(batch_i + epoch_i * dataset.num_batches_in_epoch()))
 
 
 if __name__ == '__main__':
