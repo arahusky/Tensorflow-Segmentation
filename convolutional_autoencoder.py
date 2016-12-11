@@ -98,6 +98,9 @@ class Network:
         """
         # %%
         # input to the network
+
+        self.filters = n_filters
+
         self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
                                      name='inputs')
         self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
@@ -280,13 +283,12 @@ def train():
         sess.run(tf.global_variables_initializer())
 
         # Fit all training data
-        batch_size = 100
-        n_epochs = 20
+        n_epochs = 1
         for epoch_i in range(n_epochs):
             dataset.reset_batch_pointer()
 
             for batch_i in range(dataset.num_batches_in_epoch()):
-                batch_num = epoch_i * dataset.num_batches_in_epoch() + batch_i
+                batch_num = epoch_i * dataset.num_batches_in_epoch() + batch_i + 1
 
                 augmentation_seq_deterministic = augmentation_seq.to_deterministic()
 
@@ -317,7 +319,7 @@ def train():
                                                                           n_epochs * dataset.num_batches_in_epoch(),
                                                                           epoch_i, cost, end - start))
 
-                if batch_num % 100 == 0:
+                if batch_num % 100 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
                     test_inputs, test_targets = dataset.test_set
                     test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
@@ -328,7 +330,7 @@ def train():
                     print('Step {}, test accuracy: {}'.format(batch_num, test_accuracy))
 
                     # Plot example reconstructions
-                    n_examples = 20
+                    n_examples = 8
                     test_inputs, test_targets = dataset.test_inputs[:n_examples], dataset.test_targets[:n_examples]
                     test_inputs = np.multiply(test_inputs, 1.0 / 255)
 
@@ -336,7 +338,8 @@ def train():
                         network.inputs: np.reshape(test_inputs,
                                                    [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
 
-                    fig, axs = plt.subplots(4, n_examples, figsize=(n_examples, 2))
+                    fig, axs = plt.subplots(4, n_examples, figsize=(n_examples*3, 10))
+                    fig.suptitle("Accuracy: {}, Filters: {}".format(test_accuracy, network.filters), fontsize=20)
                     for example_i in range(n_examples):
                         axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
                         axs[1][example_i].imshow(test_targets[example_i].astype(np.float32), cmap='gray')
@@ -352,7 +355,7 @@ def train():
                         # fig.show()
                         # plt.draw()
 
-                    plt.savefig('figure{}.jpg'.format(batch_i + epoch_i * dataset.num_batches_in_epoch()))
+                    plt.savefig('figure{}.jpg'.format(batch_i + epoch_i * dataset.num_batches_in_epoch() + 1))
 
 
 if __name__ == '__main__':
