@@ -15,6 +15,7 @@ from imgaug import imgaug
 from libs.activations import lrelu
 from libs.utils import corrupt
 
+
 def unravel_argmax(argmax, shape):
     output_list = [argmax // (shape[2] * shape[3]),
                    argmax % (shape[2] * shape[3]) // shape[3]]
@@ -57,6 +58,7 @@ def unpool_layer2x2_batch(bottom, argmax):
     delta = tf.SparseTensor(indices, values, tf.to_int64(top_shape))
     return tf.sparse_tensor_to_dense(tf.sparse_reorder(delta))
 
+
 class Network2:
     IMAGE_HEIGHT = 128
     IMAGE_WIDTH = 128
@@ -67,8 +69,8 @@ class Network2:
     pooling_indices = []
 
     def __init__(self,
-                 n_filters=[1, 64, 128, 128, 256],
-                 filter_sizes=[2, 2, 3, 3]):
+                 n_filters=[1, 64, 64, 64, 64],
+                 filter_sizes=[7, 7, 7, 7]):
         """Build a deep denoising autoencoder w/ tied weights.
 
         Parameters
@@ -88,7 +90,9 @@ class Network2:
         # %%
         # input to the network
 
+        self.description = "Filters: [64, 64, MP, 64, 64, MP], Kernels: 7x7"
         self.filters = n_filters
+        self.filter_sizes = filter_sizes
 
         self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
                                      name='inputs')
@@ -101,14 +105,21 @@ class Network2:
         net = tf.cond(self.is_training, lambda: corrupt(current_input), lambda: current_input)
 
         # ENCODER
-        net = self.conv2d_relu(net, layer_index=0, filter_size=2, output_channels=64)
-        net = self.conv2d_relu(net, layer_index=1, filter_size=3, output_channels=128)
-        net = self.max_pool(net, layer_index=1)
+        net = self.conv2d_relu(net, layer_index=0, filter_size=7, output_channels=64)
+        net = self.conv2d_relu(net, layer_index=1, filter_size=7, output_channels=64)
+        net = self.max_pool(net, pooling_layer_index=0)
 
-        net = self.conv2d_relu(net, layer_index=2, filter_size=2, output_channels=128)
-        net = self.conv2d_relu(net, layer_index=3, filter_size=3, output_channels=256)
-        net = self.max_pool(net, layer_index=3)
+        net = self.conv2d_relu(net, layer_index=2, filter_size=7, output_channels=64)
+        net = self.conv2d_relu(net, layer_index=3, filter_size=7, output_channels=64)
+        net = self.max_pool(net, pooling_layer_index=1)
 
+        """
+        for index, channels in enumerate(n_filters[1:]):
+            net = self.conv2d_relu(net,
+                                   layer_index=index,
+                                   filter_size=filter_sizes[index],
+                                   output_channels=channels)
+        """
         print("current input shape", net.get_shape())
 
         self.encoder.reverse()
@@ -124,8 +135,12 @@ class Network2:
         net = self.conv2d_transposed_relu(net, self.shapes[2], layer_index=2)
         net = self.conv2d_transposed_relu(net, self.shapes[3], layer_index=3)
 
-        net = tf.sigmoid(net)
+        """
+        for index, shape in enumerate(self.shapes):
+            net = self.conv2d_transposed_relu(net, shape, layer_index=index)
+        """
 
+        net = tf.sigmoid(net)
         self.segmentation_result = net  # [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS]
 
         # segmentation_as_classes = tf.reshape(self.y, [50 * self.IMAGE_HEIGHT * self.IMAGE_WIDTH, 1])
@@ -157,6 +172,7 @@ class Network2:
     def conv2d_transposed_relu(self, input, shape, layer_index):
         W = self.encoder[layer_index]
         b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]))
+        print(shape)
         output = lrelu(tf.add(
             tf.nn.conv2d_transpose(
                 input, W,
@@ -164,9 +180,9 @@ class Network2:
                 strides=[1, 2, 2, 1], padding='SAME'), b))
         return output
 
-    def max_pool(self, input, layer_index):
+    def max_pool(self, input, pooling_layer_index):
         current_input, argmax = tf.nn.max_pool_with_argmax(input, ksize=[1, 2, 2, 1],
                                                            strides=[1, 2, 2, 1], padding='SAME',
-                                                           name='pool{}'.format(layer_index + 1))
+                                                           name='pool{}'.format(pooling_layer_index))
         self.pooling_indices.append(argmax)
         return current_input

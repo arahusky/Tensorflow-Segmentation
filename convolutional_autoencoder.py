@@ -240,7 +240,10 @@ class Dataset:
 
 
 def train():
-    dataset = Dataset(folder='data{}_{}'.format(Network.IMAGE_HEIGHT, Network.IMAGE_WIDTH), include_hair=False)
+    # network = Network()
+    network = Network2()
+
+    dataset = Dataset(folder='data{}_{}'.format(network.IMAGE_HEIGHT, network.IMAGE_WIDTH), include_hair=False)
 
     inputs, targets = dataset.next_batch()
     print(inputs.shape, targets.shape)
@@ -266,7 +269,7 @@ def train():
         iaa.GaussianBlur((0, 3.0), name="GaussianBlur"),
         iaa.Dropout(0.02, name="Dropout"),
         iaa.AdditiveGaussianNoise(scale=0.01 * 255, name="GaussianNoise"),
-        iaa.Affine(translate_px={"x": (-Network.IMAGE_HEIGHT//3, Network.IMAGE_WIDTH//3)}, name="Affine")
+        iaa.Affine(translate_px={"x": (-network.IMAGE_HEIGHT // 3, network.IMAGE_WIDTH // 3)}, name="Affine")
     ])
 
     # change the activated augmenters for binary masks,
@@ -280,14 +283,11 @@ def train():
 
     hooks_binmasks = imgaug.HooksImages(activator=activator_binmasks)
 
-    network = Network()
-    #network = Network2()
-
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
         # Fit all training data
-        n_epochs = 10
+        n_epochs = 100
         for epoch_i in range(n_epochs):
             dataset.reset_batch_pointer()
 
@@ -342,8 +342,8 @@ def train():
                         network.inputs: np.reshape(test_inputs,
                                                    [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
 
-                    fig, axs = plt.subplots(4, n_examples, figsize=(n_examples*3, 10))
-                    fig.suptitle("Accuracy: {}, Filters: {}".format(test_accuracy, network.filters), fontsize=20)
+                    fig, axs = plt.subplots(4, n_examples, figsize=(n_examples * 3, 10))
+                    fig.suptitle("Accuracy: {}, {}".format(test_accuracy, network.description), fontsize=20)
                     for example_i in range(n_examples):
                         axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
                         axs[1][example_i].imshow(test_targets[example_i].astype(np.float32), cmap='gray')
