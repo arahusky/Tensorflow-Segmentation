@@ -329,6 +329,7 @@ def train():
 
                 if batch_num % 100 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
                     test_inputs, test_targets = dataset.test_set
+                    test_inputs, test_targets = test_inputs[:100], test_targets[:100]
                     test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_accuracy = sess.run(network.accuracy,
@@ -340,7 +341,7 @@ def train():
                     print("Accuracies in time: ", test_accuracies)
 
                     # Plot example reconstructions
-                    n_examples = 8
+                    n_examples = 100
                     test_inputs, test_targets = dataset.test_inputs[:n_examples], dataset.test_targets[:n_examples]
                     test_inputs = np.multiply(test_inputs, 1.0 / 255)
 

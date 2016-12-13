@@ -14,6 +14,7 @@ from imgaug import augmenters as iaa
 from imgaug import imgaug
 from libs.activations import lrelu
 from libs.utils import corrupt
+import utils
 
 
 def unravel_argmax(argmax, shape):
@@ -95,29 +96,35 @@ class Network2:
         self.filters = n_filters
         self.filter_sizes = filter_sizes
 
-        self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
+        self.inputs = tf.placeholder(tf.float32, [100, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
                                      name='inputs')
-        self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
+        self.targets = tf.placeholder(tf.float32, [100, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
 
         self.is_training = tf.placeholder_with_default(False, [], name='is_training')
         net = self.inputs
 
         # ENCODER
-        """
         net = self.conv2d_relu(net, layer_index=0, filter_size=7, output_channels=64)
         net = self.conv2d_relu(net, layer_index=1, filter_size=7, output_channels=64)
-        net = self.max_pool(net, pooling_layer_index=0)
+        net = utils.max_pool_2d(net, 2)
+        # net = self.max_pool(net, pooling_layer_index=0)
 
         net = self.conv2d_relu(net, layer_index=2, filter_size=7, output_channels=64)
         net = self.conv2d_relu(net, layer_index=3, filter_size=7, output_channels=64)
-        net = self.max_pool(net, pooling_layer_index=1)
+        net = utils.max_pool_2d(net, 2)
 
-        """
-        for index, channels in enumerate(n_filters[1:]):
-            net = self.conv2d_relu(net,
-                                   layer_index=index,
-                                   filter_size=filter_sizes[index],
-                                   output_channels=channels)
+        # net = self.conv2d_relu(net, layer_index=4, filter_size=3, output_channels=128)
+        # net = self.conv2d_relu(net, layer_index=5, filter_size=3, output_channels=128)
+        # net = utils.max_pool_2d(net, 2)
+
+
+        # net = self.max_pool(net, pooling_layer_index=1)
+
+        # for index, channels in enumerate(n_filters[1:]):
+        #     net = self.conv2d_relu(net,
+        #                            layer_index=index,
+        #                            filter_size=filter_sizes[index],
+        #                            output_channels=channels)
 
         print("current input shape", net.get_shape())
 
@@ -126,18 +133,31 @@ class Network2:
         self.pooling_indices.reverse()
 
         # DECODER
-        """
-        net = unpool_layer2x2_batch(net, self.pooling_indices[0])
+
+        print(self.shapes)
+
+        # net = unpool_layer2x2_batch(net, self.pooling_indices[0])
+        net = utils.upsample_2d(net, 2)
+
+        print("after first upsample", net.get_shape())
+
         net = self.conv2d_transposed_relu(net, self.shapes[0], layer_index=0)
+
+        print("after first deconv", net.get_shape())
         net = self.conv2d_transposed_relu(net, self.shapes[1], layer_index=1)
 
-        net = unpool_layer2x2_batch(net, self.pooling_indices[1])
+        print("after second deconv", net.get_shape())
+        # net = unpool_layer2x2_batch(net, self.pooling_indices[1])
+        net = utils.upsample_2d(net, 2)
         net = self.conv2d_transposed_relu(net, self.shapes[2], layer_index=2)
         net = self.conv2d_transposed_relu(net, self.shapes[3], layer_index=3)
 
-        """
-        for index, shape in enumerate(self.shapes):
-            net = self.conv2d_transposed_relu(net, shape, layer_index=index)
+        # net = utils.upsample_2d(net, 2)
+        # net = self.conv2d_transposed_relu(net, self.shapes[4], layer_index=4)
+        # net = self.conv2d_transposed_relu(net, self.shapes[5], layer_index=5)
+
+        # for index, shape in enumerate(self.shapes):
+        #     net = self.conv2d_transposed_relu(net, shape, layer_index=index)
 
         net = tf.sigmoid(net)
         self.segmentation_result = net  # [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS]
@@ -147,6 +167,7 @@ class Network2:
         # print(self.y.get_shape())
         # self.cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(segmentation_as_classes, targets_as_classes))
 
+        print('segmentation_result.shape: {}, targets.shape: {}'.format(self.segmentation_result.get_shape(), self.targets.get_shape()))
         # MSE loss
         self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.segmentation_result - self.targets)))
 
@@ -169,15 +190,15 @@ class Network2:
         return output
 
     def conv2d_transposed_relu(self, input, shape, layer_index):
+        print('convd2_transposed: {}, {}'.format(shape, tf.shape(self.inputs)[0]))
         # W = self.encoder[layer_index]
         W = tf.get_variable("W_deconv" + str(layer_index),
                             shape=self.encoder[layer_index].get_shape())
         b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]))
-        print(shape)
         output = lrelu(tf.add(
             tf.nn.conv2d_transpose(
                 input, W,
-                tf.pack([tf.shape(self.inputs)[0], shape[1], shape[2], shape[3]]),
+                tf.pack([100, shape[1], shape[2], shape[3]]),
                 strides=[1, 2, 2, 1], padding='SAME'), b))
         return output
 
