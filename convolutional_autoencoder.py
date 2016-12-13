@@ -4,6 +4,9 @@ import time
 from math import ceil
 
 import cv2
+import matplotlib
+
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -111,7 +114,7 @@ class Network:
         current_input = self.inputs
 
         # Optionally apply denoising autoencoder
-        current_input = tf.cond(self.is_training, lambda: corrupt(current_input), lambda: current_input)
+        # current_input = tf.cond(self.is_training, lambda: corrupt(current_input), lambda: current_input)
 
         # Build the encoder
         encoder = []
@@ -362,7 +365,11 @@ def train():
                         # fig.show()
                         # plt.draw()
 
-                    plt.savefig('figure{}.jpg'.format(batch_i + epoch_i * dataset.num_batches_in_epoch() + 1))
+                    IMAGE_PLOT_DIR = 'image_plots/'
+                    if not os.path.exists(IMAGE_PLOT_DIR):
+                        os.makedirs(IMAGE_PLOT_DIR)
+
+                    plt.savefig('{}/figure{}.jpg'.format(IMAGE_PLOT_DIR, batch_i + epoch_i * dataset.num_batches_in_epoch() + 1))
 
 
 if __name__ == '__main__':
