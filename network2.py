@@ -69,8 +69,8 @@ class Network2:
     pooling_indices = []
 
     def __init__(self,
-                 n_filters=[1, 64, 64, 64, 64, 64, 64, 64, 64],
-                 filter_sizes=[3, 3, 3, 3, 3, 3, 3, 3]):
+                 n_filters=[1, 64, 64, 64, 64, 128, 128, 128, 128],
+                 filter_sizes=[7, 7, 7, 7, 3, 3, 3, 3]):
 
         """Build a deep denoising autoencoder w/ tied weights.
 
@@ -91,10 +91,6 @@ class Network2:
         # %%
         # input to the network
 
-
-
-
-
         self.description = "Filters: {}, Kernels: {}".format(n_filters[1:], filter_sizes)
         self.filters = n_filters
         self.filter_sizes = filter_sizes
@@ -104,10 +100,7 @@ class Network2:
         self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
 
         self.is_training = tf.placeholder_with_default(False, [], name='is_training')
-        current_input = self.inputs
-
-        # Optionally apply denoising autoencoder
-        net = tf.cond(self.is_training, lambda: corrupt(current_input), lambda: current_input)
+        net = self.inputs
 
         # ENCODER
         """
@@ -176,7 +169,9 @@ class Network2:
         return output
 
     def conv2d_transposed_relu(self, input, shape, layer_index):
-        W = self.encoder[layer_index]
+        # W = self.encoder[layer_index]
+        W = tf.get_variable("W_deconv" + str(layer_index),
+                            shape=self.encoder[layer_index].get_shape())
         b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]))
         print(shape)
         output = lrelu(tf.add(

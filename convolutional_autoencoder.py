@@ -171,7 +171,7 @@ class Network:
 
 
 class Dataset:
-    def __init__(self, folder='data128_128', batch_size=50, include_hair=False):
+    def __init__(self, folder='data128_128', batch_size=100, include_hair=False):
         self.batch_size = batch_size
         self.include_hair = include_hair
 
@@ -324,7 +324,7 @@ def train():
                                                                           n_epochs * dataset.num_batches_in_epoch(),
                                                                           epoch_i, cost, end - start))
 
-                if batch_num % 200 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
+                if batch_num % 100 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
                     test_inputs, test_targets = dataset.test_set
                     test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
