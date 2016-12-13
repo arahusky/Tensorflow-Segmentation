@@ -336,8 +336,10 @@ def train():
                                                         network.is_training: False})
 
                     print('Step {}, test accuracy: {}'.format(batch_num, test_accuracy))
-                    test_accuracies.append("{0:.3f}".format(test_accuracy))
-                    print("Accuracies in time: ", test_accuracies)
+                    test_accuracies.append((test_accuracy, batch_num))
+                    print("Accuracies in time: ", [test_accuracies[x][0] for x in range(len(test_accuracies))])
+                    max_acc = max(test_accuracies)
+                    print("Best accuracy: {} in batch {}".format(max_acc[0], max_acc[1]))
 
                     # Plot example reconstructions
                     n_examples = 8
@@ -369,7 +371,8 @@ def train():
                     if not os.path.exists(IMAGE_PLOT_DIR):
                         os.makedirs(IMAGE_PLOT_DIR)
 
-                    plt.savefig('{}/figure{}.jpg'.format(IMAGE_PLOT_DIR, batch_i + epoch_i * dataset.num_batches_in_epoch() + 1))
+                    plt.savefig('{}/figure{}.jpg'.format(IMAGE_PLOT_DIR,
+                                                         batch_i + epoch_i * dataset.num_batches_in_epoch() + 1))
 
 
 if __name__ == '__main__':
