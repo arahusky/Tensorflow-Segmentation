@@ -286,8 +286,9 @@ def train():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
+        test_accuracies = []
         # Fit all training data
-        n_epochs = 100
+        n_epochs = 500
         for epoch_i in range(n_epochs):
             dataset.reset_batch_pointer()
 
@@ -323,7 +324,7 @@ def train():
                                                                           n_epochs * dataset.num_batches_in_epoch(),
                                                                           epoch_i, cost, end - start))
 
-                if batch_num % 100 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
+                if batch_num % 200 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
                     test_inputs, test_targets = dataset.test_set
                     test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
@@ -332,6 +333,8 @@ def train():
                                                         network.is_training: False})
 
                     print('Step {}, test accuracy: {}'.format(batch_num, test_accuracy))
+                    test_accuracies.append("{0:.3f}".format(test_accuracy))
+                    print("Accuracies in time: ", test_accuracies)
 
                     # Plot example reconstructions
                     n_examples = 8
@@ -363,4 +366,7 @@ def train():
 
 
 if __name__ == '__main__':
+    start = time.time()
     train()
+    end = time.time()
+    print("Time: {}".format(end - start))

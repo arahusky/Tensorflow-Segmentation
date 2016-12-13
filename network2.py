@@ -69,8 +69,9 @@ class Network2:
     pooling_indices = []
 
     def __init__(self,
-                 n_filters=[1, 64, 64, 64, 64],
-                 filter_sizes=[7, 7, 7, 7]):
+                 n_filters=[1, 64, 64, 64, 64, 64, 64, 64, 64],
+                 filter_sizes=[3, 3, 3, 3, 3, 3, 3, 3]):
+
         """Build a deep denoising autoencoder w/ tied weights.
 
         Parameters
@@ -90,7 +91,11 @@ class Network2:
         # %%
         # input to the network
 
-        self.description = "Filters: [64, 64, MP, 64, 64, MP], Kernels: 7x7"
+
+
+
+
+        self.description = "Filters: {}, Kernels: {}".format(n_filters[1:], filter_sizes)
         self.filters = n_filters
         self.filter_sizes = filter_sizes
 
@@ -105,6 +110,7 @@ class Network2:
         net = tf.cond(self.is_training, lambda: corrupt(current_input), lambda: current_input)
 
         # ENCODER
+        """
         net = self.conv2d_relu(net, layer_index=0, filter_size=7, output_channels=64)
         net = self.conv2d_relu(net, layer_index=1, filter_size=7, output_channels=64)
         net = self.max_pool(net, pooling_layer_index=0)
@@ -119,7 +125,7 @@ class Network2:
                                    layer_index=index,
                                    filter_size=filter_sizes[index],
                                    output_channels=channels)
-        """
+
         print("current input shape", net.get_shape())
 
         self.encoder.reverse()
@@ -127,6 +133,7 @@ class Network2:
         self.pooling_indices.reverse()
 
         # DECODER
+        """
         net = unpool_layer2x2_batch(net, self.pooling_indices[0])
         net = self.conv2d_transposed_relu(net, self.shapes[0], layer_index=0)
         net = self.conv2d_transposed_relu(net, self.shapes[1], layer_index=1)
@@ -138,7 +145,6 @@ class Network2:
         """
         for index, shape in enumerate(self.shapes):
             net = self.conv2d_transposed_relu(net, shape, layer_index=index)
-        """
 
         net = tf.sigmoid(net)
         self.segmentation_result = net  # [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS]
