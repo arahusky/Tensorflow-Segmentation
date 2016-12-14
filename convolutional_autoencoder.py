@@ -17,8 +17,8 @@ from imgaug import augmenters as iaa
 from imgaug import imgaug
 from libs.activations import lrelu
 from libs.utils import corrupt
-
-from network2 import Network2
+from conv2d import Conv2d
+from max_pool_2d import MaxPool2d
 
 np.set_printoptions(threshold=np.nan)
 
@@ -34,147 +34,69 @@ def _MaxPoolWithArgmaxGrad(op, grad, unused_argmax_grad):
                                      data_format='NHWC')
 
 
-def unravel_argmax(argmax, shape):
-    output_list = [argmax // (shape[2] * shape[3]),
-                   argmax % (shape[2] * shape[3]) // shape[3]]
-    return tf.pack(output_list)
-
-
-def unpool_layer2x2_batch(bottom, argmax):
-    bottom_shape = tf.shape(bottom)
-    top_shape = [bottom_shape[0], bottom_shape[1] * 2, bottom_shape[2] * 2, bottom_shape[3]]
-
-    batch_size = top_shape[0]
-    height = top_shape[1]
-    width = top_shape[2]
-    channels = top_shape[3]
-
-    argmax_shape = tf.to_int64([batch_size, height, width, channels])
-    argmax = unravel_argmax(argmax, argmax_shape)
-
-    t1 = tf.to_int64(tf.range(channels))
-    t1 = tf.tile(t1, [batch_size * (width // 2) * (height // 2)])
-    t1 = tf.reshape(t1, [-1, channels])
-    t1 = tf.transpose(t1, perm=[1, 0])
-    t1 = tf.reshape(t1, [channels, batch_size, height // 2, width // 2, 1])
-    t1 = tf.transpose(t1, perm=[1, 0, 2, 3, 4])
-
-    t2 = tf.to_int64(tf.range(batch_size))
-    t2 = tf.tile(t2, [channels * (width // 2) * (height // 2)])
-    t2 = tf.reshape(t2, [-1, batch_size])
-    t2 = tf.transpose(t2, perm=[1, 0])
-    t2 = tf.reshape(t2, [batch_size, channels, height // 2, width // 2, 1])
-
-    t3 = tf.transpose(argmax, perm=[1, 4, 2, 3, 0])
-
-    t = tf.concat(4, [t2, t3, t1])
-    indices = tf.reshape(t, [(height // 2) * (width // 2) * channels * batch_size, 4])
-
-    x1 = tf.transpose(bottom, perm=[0, 3, 1, 2])
-    values = tf.reshape(x1, [-1])
-
-    delta = tf.SparseTensor(indices, values, tf.to_int64(top_shape))
-    return tf.sparse_tensor_to_dense(tf.sparse_reorder(delta))
-
-
 class Network:
     IMAGE_HEIGHT = 128
     IMAGE_WIDTH = 128
     IMAGE_CHANNELS = 1
 
-    def __init__(self,
-                 n_filters=[1, 64, 128, 128, 256],
-                 filter_sizes=[2, 2, 3, 3]):
-        """Build a deep denoising autoencoder w/ tied weights.
+    def __init__(self, batch_size):
+        # Define network - ENCODER (decoder will be symmetric).
+        layers = []
+        layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(MaxPool2d(kernel_size=2))
 
-        Parameters
-        ----------
-        input_shape : list, optional
-            Description
-        n_filters : list, optional
-            Description
-        filter_sizes : list, optional
-            Description
+        layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(MaxPool2d(kernel_size=2))
 
-        Raises
-        ------
-        ValueError
-            Description
-        """
-        # %%
-        # input to the network
-
-        self.filters = n_filters
-
-        self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
+        self.inputs = tf.placeholder(tf.float32, [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
                                      name='inputs')
-        self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
-
+        self.targets = tf.placeholder(tf.float32, [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
         self.is_training = tf.placeholder_with_default(False, [], name='is_training')
-        current_input = self.inputs
 
-        # Optionally apply denoising autoencoder
-        # current_input = tf.cond(self.is_training, lambda: corrupt(current_input), lambda: current_input)
+        self.build_network(layers, self.inputs)
 
-        # Build the encoder
-        encoder = []
-        shapes = []
-        for layer_index, output_channels in enumerate(n_filters[1:]):
-            number_of_channels = current_input.get_shape().as_list()[3]
-            shapes.append(current_input.get_shape().as_list())
-            print(current_input.get_shape().as_list())
-            W = tf.get_variable('W' + str(layer_index), shape=(
-                filter_sizes[layer_index], filter_sizes[layer_index], number_of_channels, output_channels))
-            b = tf.Variable(tf.zeros([output_channels]))
-            encoder.append(W)
-            output = lrelu(tf.add(tf.nn.conv2d(current_input, W, strides=[1, 2, 2, 1], padding='SAME'), b))
-            current_input = output
+    def build_network(self, layers, inputs):
+        self.description = "Net: "
 
-        # current_input, argmax_1 = tf.nn.max_pool_with_argmax(current_input, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
+        # ENCODER
+        net = inputs
+        for layer in layers:
+            net = layer.create_layer(net)
+            if isinstance(layer, Conv2d):
+                self.description += "{}, ".format(layer.get_description())
 
-        # store the latent representation
-        # z = current_input
+        print("Current input shape: ", net.get_shape())
 
-        print("current input shape", current_input.get_shape())
+        layers.reverse()
+        Conv2d.reverse_global_variables()
 
-        # current_input = unpool_layer2x2_batch(current_input, argmax_1)
+        # DECODER
+        for layer in layers:
+            net = layer.create_layer_reversed(net)
 
-        encoder.reverse()
-        shapes.reverse()
-
-        # Build the decoder using the same weights
-        for layer_index, shape in enumerate(shapes):
-            W = encoder[layer_index]
-            b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]))
-            output = lrelu(tf.add(
-                tf.nn.conv2d_transpose(
-                    current_input, W,
-                    tf.pack([tf.shape(self.inputs)[0], shape[1], shape[2], shape[3]]),
-                    strides=[1, 2, 2, 1], padding='SAME'), b))
-            current_input = output
-
-        current_input = tf.sigmoid(current_input)
-
-        self.segmentation_result = current_input  # [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS]
+        net = tf.sigmoid(net)
+        self.segmentation_result = net  # [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS]
 
         # segmentation_as_classes = tf.reshape(self.y, [50 * self.IMAGE_HEIGHT * self.IMAGE_WIDTH, 1])
         # targets_as_classes = tf.reshape(self.targets, [50 * self.IMAGE_HEIGHT * self.IMAGE_WIDTH])
         # print(self.y.get_shape())
         # self.cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(segmentation_as_classes, targets_as_classes))
+        print('segmentation_result.shape: {}, targets.shape: {}'.format(self.segmentation_result.get_shape(),
+                                                                        self.targets.get_shape()))
 
         # MSE loss
-        self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.segmentation_result - self.targets)))
-
+        self.cost = tf.sqrt(tf.reduce_mean(tf.square(net - self.targets)))
         self.train_op = tf.train.AdamOptimizer().minimize(self.cost)
-
         with tf.name_scope('accuracy'):
-            argmax_probs = tf.round(self.segmentation_result)  # 0x1
+            argmax_probs = tf.round(net)  # 0x1
             correct_pred = tf.cast(tf.equal(argmax_probs, self.targets), tf.float32)
             self.accuracy = tf.reduce_mean(correct_pred)
 
 
 class Dataset:
-    def __init__(self, folder='data128_128', batch_size=100, include_hair=False):
+    def __init__(self, batch_size, folder='data128_128', include_hair=False):
         self.batch_size = batch_size
         self.include_hair = include_hair
 
@@ -243,22 +165,14 @@ class Dataset:
 
 
 def train():
-    # network = Network()
-    network = Network2()
+    BATCH_SIZE = 100
+    network = Network(BATCH_SIZE)
 
-    dataset = Dataset(folder='data{}_{}'.format(network.IMAGE_HEIGHT, network.IMAGE_WIDTH), include_hair=False)
+    dataset = Dataset(folder='data{}_{}'.format(network.IMAGE_HEIGHT, network.IMAGE_WIDTH), include_hair=False,
+                      batch_size=BATCH_SIZE)
 
     inputs, targets = dataset.next_batch()
     print(inputs.shape, targets.shape)
-    # print(targets[0].astype(np.float32))
-
-    # Image.fromarray(targets[0] * 255).show()
-
-    # Image.fromarray(targets[0], 'RGB').show()
-
-    # load MNIST as before
-    # mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-    # mean_img = np.mean(dataset.train_inputs)
 
     # augmentation_seq = iaa.Sequential([
     #     iaa.Crop(px=(0, 16)),  # crop images from each side by 0 to 16px (randomly chosen)
