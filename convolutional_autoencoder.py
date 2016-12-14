@@ -19,6 +19,7 @@ from libs.activations import lrelu
 from libs.utils import corrupt
 from conv2d import Conv2d
 from max_pool_2d import MaxPool2d
+    import datetime
 
 np.set_printoptions(threshold=np.nan)
 
@@ -39,23 +40,25 @@ class Network:
     IMAGE_WIDTH = 128
     IMAGE_CHANNELS = 1
 
-    def __init__(self, batch_size):
+    def __init__(self):
         # Define network - ENCODER (decoder will be symmetric).
+
         layers = []
-        layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
-        layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
         layers.append(MaxPool2d(kernel_size=2))
 
-        layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
-        layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
         layers.append(MaxPool2d(kernel_size=2))
 
-        self.build_network(layers, batch_size)
+        self.build_network(layers)
 
-    def build_network(self, layers, batch_size):
-        self.inputs = tf.placeholder(tf.float32, [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
+    def build_network(self, layers):
+
+        self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
                                      name='inputs')
-        self.targets = tf.placeholder(tf.float32, [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
+        self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
         self.is_training = tf.placeholder_with_default(False, [], name='is_training')
         self.description = "Net: "
 
@@ -163,7 +166,8 @@ class Dataset:
 
 def train():
     BATCH_SIZE = 100
-    network = Network(BATCH_SIZE)
+    # network = network1.Network2(BATCH_SIZE)
+    network = Network()
 
     dataset = Dataset(folder='data{}_{}'.format(network.IMAGE_HEIGHT, network.IMAGE_WIDTH), include_hair=False,
                       batch_size=BATCH_SIZE)
@@ -200,6 +204,10 @@ def train():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
+        # TODO log_filename should reflect architecture
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        summary_writer = tf.train.SummaryWriter('{}/{}'.format('logs', timestamp), graph=tf.get_default_graph())
+
         test_accuracies = []
         # Fit all training data
         n_epochs = 500
@@ -232,11 +240,14 @@ def train():
                                                                           n_epochs * dataset.num_batches_in_epoch(),
                                                                           epoch_i, cost, end - start))
 
-                if batch_num % 100 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
+                if batch_num % 10 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
                     test_inputs, test_targets = dataset.test_set
-                    test_inputs, test_targets = test_inputs[:100], test_targets[:100]
+                    # test_inputs, test_targets = test_inputs[:100], test_targets[:100]
+
                     test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+
+                    print(test_inputs.shape)
                     test_accuracy = sess.run(network.accuracy,
                                              feed_dict={network.inputs: test_inputs, network.targets: test_targets,
                                                         network.is_training: False})
@@ -249,7 +260,7 @@ def train():
                     print("Total time: {}".format(time.time() - global_start))
 
                     # Plot example reconstructions
-                    n_examples = 100
+                    n_examples = 12
                     test_inputs, test_targets = dataset.test_inputs[:n_examples], dataset.test_targets[:n_examples]
                     test_inputs = np.multiply(test_inputs, 1.0 / 255)
 
