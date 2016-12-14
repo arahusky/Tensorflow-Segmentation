@@ -50,18 +50,17 @@ class Network:
         layers.append(Conv2d(kernel_size=3, strides=[1, 2, 2, 1], output_channels=64))
         layers.append(MaxPool2d(kernel_size=2))
 
+        self.build_network(layers, batch_size)
+
+    def build_network(self, layers, batch_size):
         self.inputs = tf.placeholder(tf.float32, [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
                                      name='inputs')
         self.targets = tf.placeholder(tf.float32, [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
         self.is_training = tf.placeholder_with_default(False, [], name='is_training')
-
-        self.build_network(layers, self.inputs)
-
-    def build_network(self, layers, inputs):
         self.description = "Net: "
 
         # ENCODER
-        net = inputs
+        net = self.inputs
         for layer in layers:
             net = layer.create_layer(net)
             if isinstance(layer, Conv2d):
@@ -76,8 +75,7 @@ class Network:
         for layer in layers:
             net = layer.create_layer_reversed(net)
 
-        net = tf.sigmoid(net)
-        self.segmentation_result = net  # [batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS]
+        self.segmentation_result = tf.sigmoid(net)
 
         # segmentation_as_classes = tf.reshape(self.y, [50 * self.IMAGE_HEIGHT * self.IMAGE_WIDTH, 1])
         # targets_as_classes = tf.reshape(self.targets, [50 * self.IMAGE_HEIGHT * self.IMAGE_WIDTH])
@@ -87,10 +85,10 @@ class Network:
                                                                         self.targets.get_shape()))
 
         # MSE loss
-        self.cost = tf.sqrt(tf.reduce_mean(tf.square(net - self.targets)))
+        self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.segmentation_result - self.targets)))
         self.train_op = tf.train.AdamOptimizer().minimize(self.cost)
         with tf.name_scope('accuracy'):
-            argmax_probs = tf.round(net)  # 0x1
+            argmax_probs = tf.round(self.segmentation_result)  # 0x1
             correct_pred = tf.cast(tf.equal(argmax_probs, self.targets), tf.float32)
             self.accuracy = tf.reduce_mean(correct_pred)
 

@@ -44,7 +44,7 @@ class Conv2d(Layer):
             tf.nn.conv2d_transpose(
                 input, W,
                 tf.pack([100, shape[1], shape[2], shape[3]]),
-                strides=[1, 1, 1, 1], padding='SAME'), b))
+                strides=self.strides, padding='SAME'), b))
 
         Conv2d.layer_index += 1
         return output
