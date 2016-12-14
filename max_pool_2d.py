@@ -13,4 +13,4 @@ class MaxPool2d(Layer):
         return utils.upsample_2d(input, self.kernel_size)
 
     def get_description(self):
-        return "MP:{}".format(self.kernel_size)
+        return "M{};".format(self.kernel_size)

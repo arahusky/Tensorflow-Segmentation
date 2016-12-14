@@ -63,4 +63,4 @@ class Conv2d(Layer):
         return output
 
     def get_description(self):
-        return "C:{}K:{}".format(self.output_channels, self.kernel_size)
+            return "C{},{},{};".format(self.kernel_size, self.output_channels, self.strides[1])
