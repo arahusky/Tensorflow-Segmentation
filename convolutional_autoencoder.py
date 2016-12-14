@@ -19,7 +19,8 @@ from libs.activations import lrelu
 from libs.utils import corrupt
 from conv2d import Conv2d
 from max_pool_2d import MaxPool2d
-    import datetime
+import datetime
+import io
 
 np.set_printoptions(threshold=np.nan)
 
@@ -45,12 +46,17 @@ class Network:
 
         layers = []
         layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
-        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
         layers.append(MaxPool2d(kernel_size=2))
 
         layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
-        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
         layers.append(MaxPool2d(kernel_size=2))
+
+        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
+        layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
+        layers.append(MaxPool2d(kernel_size=2))
+
 
         self.build_network(layers)
 
@@ -93,6 +99,10 @@ class Network:
             argmax_probs = tf.round(self.segmentation_result)  # 0x1
             correct_pred = tf.cast(tf.equal(argmax_probs, self.targets), tf.float32)
             self.accuracy = tf.reduce_mean(correct_pred)
+
+            tf.scalar_summary('accuracy', self.accuracy)
+
+        self.summaries = tf.merge_all_summaries()
 
 
 class Dataset:
@@ -163,6 +173,33 @@ class Dataset:
     def test_set(self):
         return np.array(self.test_inputs, dtype=np.uint8), np.array(self.test_targets, dtype=np.uint8)
 
+def draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, network, batch_num):
+    n_examples_to_plot = 12
+    fig, axs = plt.subplots(4, n_examples_to_plot, figsize=(n_examples_to_plot * 3, 10))
+    fig.suptitle("Accuracy: {}, {}".format(test_accuracy, network.description), fontsize=20)
+    for example_i in range(n_examples_to_plot):
+        axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
+        axs[1][example_i].imshow(test_targets[example_i].astype(np.float32), cmap='gray')
+        axs[2][example_i].imshow(
+            np.reshape(test_segmentation[example_i], [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
+            cmap='gray')
+
+        test_image_thresholded = np.array(
+            [0 if x < 0.5 else 255 for x in test_segmentation[example_i].flatten()])
+        axs[3][example_i].imshow(
+            np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
+            cmap='gray')
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+
+    IMAGE_PLOT_DIR = 'image_plots/'
+    if not os.path.exists(IMAGE_PLOT_DIR):
+        os.makedirs(IMAGE_PLOT_DIR)
+
+    plt.savefig('{}/figure{}.jpg'.format(IMAGE_PLOT_DIR, batch_num + 1))
+    return buf
 
 def train():
     BATCH_SIZE = 100
@@ -206,7 +243,7 @@ def train():
 
         # TODO log_filename should reflect architecture
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        summary_writer = tf.train.SummaryWriter('{}/{}'.format('logs', timestamp), graph=tf.get_default_graph())
+        summary_writer = tf.train.SummaryWriter('{}/{}-{}'.format('logs', network.description, timestamp), graph=tf.get_default_graph())
 
         test_accuracies = []
         # Fit all training data
@@ -240,17 +277,20 @@ def train():
                                                                           n_epochs * dataset.num_batches_in_epoch(),
                                                                           epoch_i, cost, end - start))
 
-                if batch_num % 10 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
+                if batch_num % 100 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
                     test_inputs, test_targets = dataset.test_set
                     # test_inputs, test_targets = test_inputs[:100], test_targets[:100]
 
                     test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                    test_inputs = np.multiply(test_inputs, 1.0 / 255)
 
                     print(test_inputs.shape)
-                    test_accuracy = sess.run(network.accuracy,
+                    summary, test_accuracy = sess.run([network.summaries, network.accuracy],
                                              feed_dict={network.inputs: test_inputs, network.targets: test_targets,
                                                         network.is_training: False})
+
+                    summary_writer.add_summary(summary, batch_num)
 
                     print('Step {}, test accuracy: {}'.format(batch_num, test_accuracy))
                     test_accuracies.append((test_accuracy, batch_num))
@@ -268,28 +308,20 @@ def train():
                         network.inputs: np.reshape(test_inputs,
                                                    [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
 
-                    n_examples_to_plot = 12
-                    fig, axs = plt.subplots(4, n_examples_to_plot, figsize=(n_examples_to_plot * 3, 10))
-                    fig.suptitle("Accuracy: {}, {}".format(test_accuracy, network.description), fontsize=20)
-                    for example_i in range(n_examples_to_plot):
-                        axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
-                        axs[1][example_i].imshow(test_targets[example_i].astype(np.float32), cmap='gray')
-                        axs[2][example_i].imshow(
-                            np.reshape(test_segmentation[example_i], [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
-                            cmap='gray')
+                    # Prepare the plot
+                    test_plot_buf = draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, network, batch_num)
 
-                        test_image_thresholded = np.array(
-                            [0 if x < 0.5 else 255 for x in test_segmentation[example_i].flatten()])
-                        axs[3][example_i].imshow(
-                            np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
-                            cmap='gray')
+                    # Convert PNG buffer to TF image
+                    image = tf.image.decode_png(test_plot_buf.getvalue(), channels=4)
 
-                    IMAGE_PLOT_DIR = 'image_plots/'
-                    if not os.path.exists(IMAGE_PLOT_DIR):
-                        os.makedirs(IMAGE_PLOT_DIR)
+                    # Add the batch dimension
+                    image = tf.expand_dims(image, 0)
 
-                    plt.savefig('{}/figure{}.jpg'.format(IMAGE_PLOT_DIR,
-                                                         batch_i + epoch_i * dataset.num_batches_in_epoch() + 1))
+                    # Add image summary
+                    image_summary_op = tf.image_summary("plot", image)
+
+                    image_summary = sess.run(image_summary_op)
+                    summary_writer.add_summary(image_summary)
 
 
 if __name__ == '__main__':

@@ -41,11 +41,20 @@ class Conv2d(Layer):
 
         W = tf.get_variable("W_deconv" + str(Conv2d.layer_index), shape=self.encoder_matrix.get_shape())
         b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]))
+
+        # if self.strides==[1, 1, 1, 1]:
+        #     print('Now')
+        #     output = lrelu(tf.add(
+        #         tf.nn.conv2d(input, W,strides=self.strides, padding='SAME'), b))
+        # else:
+        #     print('1Now1')
         output = lrelu(tf.add(
             tf.nn.conv2d_transpose(
                 input, W,
                 tf.pack([tf.shape(input)[0], self.input_shape[1], self.input_shape[2], self.input_shape[3]]),
                 strides=self.strides, padding='SAME'), b))
+
+
 
         Conv2d.layer_index += 1
         output.set_shape([None, self.input_shape[1], self.input_shape[2], self.input_shape[3]])
