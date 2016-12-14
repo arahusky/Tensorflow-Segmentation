@@ -3,3 +3,4 @@ libs/__pycache__/
 figure*.jpg
 .idea/
 *.pyc
+logs/
