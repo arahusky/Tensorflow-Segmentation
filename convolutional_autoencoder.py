@@ -41,21 +41,22 @@ class Network:
     IMAGE_WIDTH = 128
     IMAGE_CHANNELS = 1
 
-    def __init__(self):
+    def __init__(self, layers = None):
         # Define network - ENCODER (decoder will be symmetric).
 
-        layers = []
-        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
-        layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
-        layers.append(MaxPool2d(kernel_size=2))
+        if layers == None:
+            layers = []
+            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
+            layers.append(MaxPool2d(kernel_size=2))
 
-        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
-        layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
-        layers.append(MaxPool2d(kernel_size=2))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
+            layers.append(MaxPool2d(kernel_size=2))
 
-        layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
-        layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
-        layers.append(MaxPool2d(kernel_size=2))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
+            layers.append(MaxPool2d(kernel_size=2))
 
 
         self.build_network(layers)
@@ -329,8 +330,9 @@ def train():
                     image_summary = sess.run(image_summary_op)
                     summary_writer.add_summary(image_summary)
 
-                    checkpoint_path = os.path.join('save', network.description, timestamp, 'model.ckpt')
-                    saver.save(sess, checkpoint_path, global_step=batch_num)
+                    if test_accuracy >= max_acc[0]:
+                        checkpoint_path = os.path.join('save', network.description, timestamp, 'model.ckpt')
+                        saver.save(sess, checkpoint_path, global_step=batch_num)
 
 
 if __name__ == '__main__':
