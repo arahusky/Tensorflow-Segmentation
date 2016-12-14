@@ -66,13 +66,13 @@ class Network:
                                      name='inputs')
         self.targets = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, 1], name='targets')
         self.is_training = tf.placeholder_with_default(False, [], name='is_training')
-        self.description = "Net: "
+        self.description = ""
 
         # ENCODER
         net = self.inputs
         for layer in layers:
             net = layer.create_layer(net)
-            self.description += "{}, ".format(layer.get_description())
+            self.description += "{}".format(layer.get_description())
 
         print("Current input shape: ", net.get_shape())
 
@@ -203,8 +203,15 @@ def draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, ne
 
 def train():
     BATCH_SIZE = 100
-    # network = network1.Network2(BATCH_SIZE)
+
     network = Network()
+
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+
+    # create directory for saving models
+    os.makedirs(os.path.join('save', network.description, timestamp))
+
+
 
     dataset = Dataset(folder='data{}_{}'.format(network.IMAGE_HEIGHT, network.IMAGE_WIDTH), include_hair=False,
                       batch_size=BATCH_SIZE)
@@ -241,9 +248,8 @@ def train():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        # TODO log_filename should reflect architecture
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         summary_writer = tf.train.SummaryWriter('{}/{}-{}'.format('logs', network.description, timestamp), graph=tf.get_default_graph())
+        saver = tf.train.Saver(tf.all_variables(), max_to_keep=None)
 
         test_accuracies = []
         # Fit all training data
@@ -322,6 +328,9 @@ def train():
 
                     image_summary = sess.run(image_summary_op)
                     summary_writer.add_summary(image_summary)
+
+                    checkpoint_path = os.path.join('save', network.description, timestamp, 'model.ckpt')
+                    saver.save(sess, checkpoint_path, global_step=batch_num)
 
 
 if __name__ == '__main__':
