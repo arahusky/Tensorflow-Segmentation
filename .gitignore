@@ -4,3 +4,4 @@ figure*.jpg
 .idea/
 *.pyc
 logs/
+save/

@@ -57,7 +57,6 @@ class Network:
         layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
         layers.append(MaxPool2d(kernel_size=2))
 
-
         self.build_network(layers)
 
     def build_network(self, layers):
@@ -173,6 +172,7 @@ class Dataset:
     def test_set(self):
         return np.array(self.test_inputs, dtype=np.uint8), np.array(self.test_targets, dtype=np.uint8)
 
+
 def draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, network, batch_num):
     n_examples_to_plot = 12
     fig, axs = plt.subplots(4, n_examples_to_plot, figsize=(n_examples_to_plot * 3, 10))
@@ -198,8 +198,9 @@ def draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, ne
     if not os.path.exists(IMAGE_PLOT_DIR):
         os.makedirs(IMAGE_PLOT_DIR)
 
-    plt.savefig('{}/figure{}.jpg'.format(IMAGE_PLOT_DIR, batch_num + 1))
+    plt.savefig('{}/figure{}.jpg'.format(IMAGE_PLOT_DIR, batch_num))
     return buf
+
 
 def train():
     BATCH_SIZE = 100
@@ -210,8 +211,6 @@ def train():
 
     # create directory for saving models
     os.makedirs(os.path.join('save', network.description, timestamp))
-
-
 
     dataset = Dataset(folder='data{}_{}'.format(network.IMAGE_HEIGHT, network.IMAGE_WIDTH), include_hair=False,
                       batch_size=BATCH_SIZE)
@@ -248,7 +247,8 @@ def train():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        summary_writer = tf.train.SummaryWriter('{}/{}-{}'.format('logs', network.description, timestamp), graph=tf.get_default_graph())
+        summary_writer = tf.train.SummaryWriter('{}/{}-{}'.format('logs', network.description, timestamp),
+                                                graph=tf.get_default_graph())
         saver = tf.train.Saver(tf.all_variables(), max_to_keep=None)
 
         test_accuracies = []
@@ -293,8 +293,9 @@ def train():
 
                     print(test_inputs.shape)
                     summary, test_accuracy = sess.run([network.summaries, network.accuracy],
-                                             feed_dict={network.inputs: test_inputs, network.targets: test_targets,
-                                                        network.is_training: False})
+                                                      feed_dict={network.inputs: test_inputs,
+                                                                 network.targets: test_targets,
+                                                                 network.is_training: False})
 
                     summary_writer.add_summary(summary, batch_num)
 
@@ -315,7 +316,8 @@ def train():
                                                    [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
 
                     # Prepare the plot
-                    test_plot_buf = draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, network, batch_num)
+                    test_plot_buf = draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, network,
+                                                 batch_num)
 
                     # Convert PNG buffer to TF image
                     image = tf.image.decode_png(test_plot_buf.getvalue(), channels=4)
