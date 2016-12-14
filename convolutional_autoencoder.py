@@ -63,8 +63,7 @@ class Network:
         net = self.inputs
         for layer in layers:
             net = layer.create_layer(net)
-            if isinstance(layer, Conv2d):
-                self.description += "{}, ".format(layer.get_description())
+            self.description += "{}, ".format(layer.get_description())
 
         print("Current input shape: ", net.get_shape())
 
@@ -204,6 +203,7 @@ def train():
         test_accuracies = []
         # Fit all training data
         n_epochs = 500
+        global_start = time.time()
         for epoch_i in range(n_epochs):
             dataset.reset_batch_pointer()
 
@@ -224,13 +224,6 @@ def train():
 
                 batch_targets = augmentation_seq_deterministic.augment_images(batch_targets, hooks=hooks_binmasks)
 
-                # print(batch_inputs.dtype)
-                # print(batch_targets.dtype)
-                # for i in range(3):
-                #     cv2.imshow('augmented', batch_inputs[i])
-                #     cv2.imshow('target', batch_targets[i].astype(np.float32))
-                #     cv2.waitKey(0)
-                # train = np.array([img - mean_img for img in batch_inputs]).reshape((dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS))
                 cost, _ = sess.run([network.cost, network.train_op],
                                    feed_dict={network.inputs: batch_inputs, network.targets: batch_targets,
                                               network.is_training: True})
@@ -253,6 +246,7 @@ def train():
                     print("Accuracies in time: ", [test_accuracies[x][0] for x in range(len(test_accuracies))])
                     max_acc = max(test_accuracies)
                     print("Best accuracy: {} in batch {}".format(max_acc[0], max_acc[1]))
+                    print("Total time: {}".format(time.time() - global_start))
 
                     # Plot example reconstructions
                     n_examples = 100
@@ -278,8 +272,6 @@ def train():
                         axs[3][example_i].imshow(
                             np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
                             cmap='gray')
-                        # fig.show()
-                        # plt.draw()
 
                     IMAGE_PLOT_DIR = 'image_plots/'
                     if not os.path.exists(IMAGE_PLOT_DIR):
@@ -290,7 +282,4 @@ def train():
 
 
 if __name__ == '__main__':
-    start = time.time()
     train()
-    end = time.time()
-    print("Time: {}".format(end - start))

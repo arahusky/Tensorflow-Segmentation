@@ -11,3 +11,6 @@ class MaxPool2d(Layer):
 
     def create_layer_reversed(self, input):
         return utils.upsample_2d(input, self.kernel_size)
+
+    def get_description(self):
+        return "MP:{}".format(self.kernel_size)
