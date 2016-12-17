@@ -41,40 +41,22 @@ class Network:
     IMAGE_WIDTH = 128
     IMAGE_CHANNELS = 1
 
-    def __init__(self, layers = None):
+    def __init__(self, layers = None, per_image_standardization=True, batch_norm=True, skip_connections=True):
         # Define network - ENCODER (decoder will be symmetric).
 
         if layers == None:
             layers = []
             layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_1_1'))
             layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_1_2'))
-            layers.append(MaxPool2d(kernel_size=2, name='max_1', skip_connection=True))
+            layers.append(MaxPool2d(kernel_size=2, name='max_1', skip_connection=True and skip_connections))
 
             layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_2_1'))
             layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_2_2'))
-            layers.append(MaxPool2d(kernel_size=2, name='max_2', skip_connection=True))
+            layers.append(MaxPool2d(kernel_size=2, name='max_2', skip_connection=True and skip_connections))
 
             layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_3_1'))
             layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_3_2'))
             layers.append(MaxPool2d(kernel_size=2, name='max_3'))
-
-            # layers.append("switch_to_deconv")
-
-            # layers.append(MaxPool2d(kernel_size=2, name='max_3'))
-            # layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='deconv_3_2'))
-            # layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='deconv_3_1'))
-
-            # layers.append(MaxPool2d(kernel_size=2, name='max_2'))
-            # layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='deconv_2_2'))
-            # layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='deconv_2_1'))
-
-            # layers.append(MaxPool2d(kernel_size=2, name='max_1'))
-            # layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='deconv_1_2'))
-            # layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='deconv_1_1'))
-
-        self.build_network(layers)
-
-    def build_network(self, layers):
 
         self.inputs = tf.placeholder(tf.float32, [None, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNELS],
                                      name='inputs')
@@ -84,8 +66,13 @@ class Network:
 
         self.layers = {}
 
+        if per_image_standardization:
+            list_of_images_norm = tf.map_fn(tf.image.per_image_standardization, self.inputs)
+            net = tf.pack(list_of_images_norm)
+        else:
+            net = self.inputs
+
         # ENCODER
-        net = self.inputs
         for layer in layers:
             self.layers[layer.name] = net = layer.create_layer(net)
             self.description += "{}".format(layer.get_description())
