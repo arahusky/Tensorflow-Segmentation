@@ -46,17 +46,31 @@ class Network:
 
         if layers == None:
             layers = []
-            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
-            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
-            layers.append(MaxPool2d(kernel_size=2))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_1_1'))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_1_2'))
+            layers.append(MaxPool2d(kernel_size=2, name='max_1', skip_connection=True))
 
-            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
-            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
-            layers.append(MaxPool2d(kernel_size=2))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_2_1'))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_2_2'))
+            layers.append(MaxPool2d(kernel_size=2, name='max_2', skip_connection=True))
 
-            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64))
-            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64))
-            layers.append(MaxPool2d(kernel_size=2))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_3_1'))
+            layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_3_2'))
+            layers.append(MaxPool2d(kernel_size=2, name='max_3'))
+
+            # layers.append("switch_to_deconv")
+
+            # layers.append(MaxPool2d(kernel_size=2, name='max_3'))
+            # layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='deconv_3_2'))
+            # layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='deconv_3_1'))
+
+            # layers.append(MaxPool2d(kernel_size=2, name='max_2'))
+            # layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='deconv_2_2'))
+            # layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='deconv_2_1'))
+
+            # layers.append(MaxPool2d(kernel_size=2, name='max_1'))
+            # layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='deconv_1_2'))
+            # layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='deconv_1_1'))
 
         self.build_network(layers)
 
@@ -68,10 +82,12 @@ class Network:
         self.is_training = tf.placeholder_with_default(False, [], name='is_training')
         self.description = ""
 
+        self.layers = {}
+
         # ENCODER
         net = self.inputs
         for layer in layers:
-            net = layer.create_layer(net)
+            self.layers[layer.name] = net = layer.create_layer(net)
             self.description += "{}".format(layer.get_description())
 
         print("Current input shape: ", net.get_shape())
@@ -81,7 +97,7 @@ class Network:
 
         # DECODER
         for layer in layers:
-            net = layer.create_layer_reversed(net)
+            net = layer.create_layer_reversed(net, prev_layer=self.layers[layer.name])
 
         self.segmentation_result = tf.sigmoid(net)
 
