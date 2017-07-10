@@ -57,7 +57,7 @@ We experimented with several architectures (some of them are mentioned in projec
 
 # Requirements:
 - Python 3.5
-- Tensorflow > 0.12.0
+- Tensorflow > 1.0
 - Opencv 3.x
 
 # References:

@@ -15,8 +15,6 @@ from tensorflow.python.ops import gen_nn_ops
 
 from imgaug import augmenters as iaa
 from imgaug import imgaug
-from libs.activations import lrelu
-from libs.utils import corrupt
 from conv2d import Conv2d
 from max_pool_2d import MaxPool2d
 import datetime
@@ -25,15 +23,15 @@ import io
 np.set_printoptions(threshold=np.nan)
 
 
-@ops.RegisterGradient("MaxPoolWithArgmax")
-def _MaxPoolWithArgmaxGrad(op, grad, unused_argmax_grad):
-    return gen_nn_ops._max_pool_grad(op.inputs[0],
-                                     op.outputs[0],
-                                     grad,
-                                     op.get_attr("ksize"),
-                                     op.get_attr("strides"),
-                                     padding=op.get_attr("padding"),
-                                     data_format='NHWC')
+# @ops.RegisterGradient("MaxPoolWithArgmax")
+# def _MaxPoolWithArgmaxGrad(op, grad, unused_argmax_grad):
+#     return gen_nn_ops._max_pool_grad(op.inputs[0],
+#                                      op.outputs[0],
+#                                      grad,
+#                                      op.get_attr("ksize"),
+#                                      op.get_attr("strides"),
+#                                      padding=op.get_attr("padding"),
+#                                      data_format='NHWC')
 
 
 class Network:
@@ -41,18 +39,18 @@ class Network:
     IMAGE_WIDTH = 128
     IMAGE_CHANNELS = 1
 
-    def __init__(self, layers = None, per_image_standardization=True, batch_norm=True, skip_connections=True):
+    def __init__(self, layers=None, per_image_standardization=True, batch_norm=True, skip_connections=True):
         # Define network - ENCODER (decoder will be symmetric).
 
         if layers == None:
             layers = []
             layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_1_1'))
             layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_1_2'))
-            layers.append(MaxPool2d(kernel_size=2, name='max_1', skip_connection=True and skip_connections))
+            layers.append(MaxPool2d(kernel_size=2, name='max_1', skip_connection=skip_connections))
 
             layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_2_1'))
             layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_2_2'))
-            layers.append(MaxPool2d(kernel_size=2, name='max_2', skip_connection=True and skip_connections))
+            layers.append(MaxPool2d(kernel_size=2, name='max_2', skip_connection=skip_connections))
 
             layers.append(Conv2d(kernel_size=7, strides=[1, 2, 2, 1], output_channels=64, name='conv_3_1'))
             layers.append(Conv2d(kernel_size=7, strides=[1, 1, 1, 1], output_channels=64, name='conv_3_2'))
@@ -68,7 +66,7 @@ class Network:
 
         if per_image_standardization:
             list_of_images_norm = tf.map_fn(tf.image.per_image_standardization, self.inputs)
-            net = tf.pack(list_of_images_norm)
+            net = tf.stack(list_of_images_norm)
         else:
             net = self.inputs
 
@@ -103,9 +101,9 @@ class Network:
             correct_pred = tf.cast(tf.equal(argmax_probs, self.targets), tf.float32)
             self.accuracy = tf.reduce_mean(correct_pred)
 
-            tf.scalar_summary('accuracy', self.accuracy)
+            tf.summary.scalar('accuracy', self.accuracy)
 
-        self.summaries = tf.merge_all_summaries()
+        self.summaries = tf.summary.merge_all()
 
 
 class Dataset:
@@ -251,8 +249,8 @@ def train():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        summary_writer = tf.train.SummaryWriter('{}/{}-{}'.format('logs', network.description, timestamp),
-                                                graph=tf.get_default_graph())
+        summary_writer = tf.summary.FileWriter('{}/{}-{}'.format('logs', network.description, timestamp),
+                                               graph=tf.get_default_graph())
         saver = tf.train.Saver(tf.all_variables(), max_to_keep=None)
 
         test_accuracies = []
@@ -330,7 +328,7 @@ def train():
                     image = tf.expand_dims(image, 0)
 
                     # Add image summary
-                    image_summary_op = tf.image_summary("plot", image)
+                    image_summary_op = tf.summary.image("plot", image)
 
                     image_summary = sess.run(image_summary_op)
                     summary_writer.add_summary(image_summary)
