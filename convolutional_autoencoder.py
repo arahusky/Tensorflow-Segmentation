@@ -19,6 +19,7 @@ from conv2d import Conv2d
 from max_pool_2d import MaxPool2d
 import datetime
 import io
+from tqdm import tqdm
 
 np.set_printoptions(threshold=np.nan)
 
@@ -35,9 +36,9 @@ np.set_printoptions(threshold=np.nan)
 
 
 class Network:
-    IMAGE_HEIGHT = 128
-    IMAGE_WIDTH = 128
-    IMAGE_CHANNELS = 1
+    IMAGE_HEIGHT = 256
+    IMAGE_WIDTH = 256
+    IMAGE_CHANNELS = 3
 
     def __init__(self, layers=None, per_image_standardization=True, batch_norm=True, skip_connections=True):
         # Define network - ENCODER (decoder will be symmetric).
@@ -107,9 +108,10 @@ class Network:
 
 
 class Dataset:
-    def __init__(self, batch_size, folder='data128_128', include_hair=False):
+    def __init__(self, batch_size, folder='data128_128', include_hair=False, load_gray=False):
         self.batch_size = batch_size
         self.include_hair = include_hair
+        self.load_gray = load_gray
 
         train_files, validation_files, test_files = self.train_valid_test_split(
             os.listdir(os.path.join(folder, 'inputs')))
@@ -127,7 +129,10 @@ class Dataset:
             input_image = os.path.join(folder, 'inputs', file)
             target_image = os.path.join(folder, 'targets' if self.include_hair else 'targets_face_only', file)
 
-            test_image = np.array(cv2.imread(input_image, 0))  # load grayscale
+            if self.load_gray:
+                test_image = np.array(cv2.imread(input_image, 0))  # load grayscale
+            else:
+                test_image = np.array(cv2.imread(input_image))
             # test_image = np.multiply(test_image, 1.0 / 255)
             inputs.append(test_image)
 
@@ -182,15 +187,21 @@ def draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, ne
     for example_i in range(n_examples_to_plot):
         axs[0][example_i].imshow(test_inputs[example_i], cmap='gray')
         axs[1][example_i].imshow(test_targets[example_i].astype(np.float32), cmap='gray')
-        axs[2][example_i].imshow(
-            np.reshape(test_segmentation[example_i], [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
-            cmap='gray')
-
         test_image_thresholded = np.array(
-            [0 if x < 0.5 else 255 for x in test_segmentation[example_i].flatten()])
-        axs[3][example_i].imshow(
-            np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
-            cmap='gray')
+                [0 if x < 0.5 else 255 for x in test_segmentation[example_i].flatten()])
+        
+        if network.IMAGE_CHANNELS == 3:
+            axs[2][example_i].imshow(test_segmentation[example_i] ,cmap='gray')
+            axs[3][example_i].imshow(
+                np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS]).astype(np.uint8),
+                cmap='gray')
+        else:
+            axs[2][example_i].imshow(
+                np.reshape(test_segmentation[example_i], [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
+                cmap='gray')
+            axs[3][example_i].imshow(
+                np.reshape(test_image_thresholded, [network.IMAGE_HEIGHT, network.IMAGE_WIDTH]),
+                cmap='gray')
 
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
@@ -203,7 +214,6 @@ def draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, ne
     plt.savefig('{}/figure{}.jpg'.format(IMAGE_PLOT_DIR, batch_num))
     return buf
 
-
 def train():
     BATCH_SIZE = 100
 
@@ -215,7 +225,7 @@ def train():
     os.makedirs(os.path.join('save', network.description, timestamp))
 
     dataset = Dataset(folder='data{}_{}'.format(network.IMAGE_HEIGHT, network.IMAGE_WIDTH), include_hair=False,
-                      batch_size=BATCH_SIZE)
+                      batch_size=BATCH_SIZE, load_gray=False if network.IMAGE_CHANNELS==3 else True)
 
     inputs, targets = dataset.next_batch()
     print(inputs.shape, targets.shape)
@@ -257,7 +267,7 @@ def train():
         # Fit all training data
         n_epochs = 500
         global_start = time.time()
-        for epoch_i in range(n_epochs):
+        for epoch_i in tqdm(range(n_epochs)):
             dataset.reset_batch_pointer()
 
             for batch_i in range(dataset.num_batches_in_epoch()):
@@ -268,7 +278,7 @@ def train():
                 start = time.time()
                 batch_inputs, batch_targets = dataset.next_batch()
                 batch_inputs = np.reshape(batch_inputs,
-                                          (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                                          (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS))
                 batch_targets = np.reshape(batch_targets,
                                            (dataset.batch_size, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
 
@@ -285,11 +295,11 @@ def train():
                                                                           n_epochs * dataset.num_batches_in_epoch(),
                                                                           epoch_i, cost, end - start))
 
-                if batch_num % 100 == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
+                if batch_num % BATCH_SIZE == 0 or batch_num == n_epochs * dataset.num_batches_in_epoch():
                     test_inputs, test_targets = dataset.test_set
                     # test_inputs, test_targets = test_inputs[:100], test_targets[:100]
 
-                    test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
+                    test_inputs = np.reshape(test_inputs, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS))
                     test_targets = np.reshape(test_targets, (-1, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1))
                     test_inputs = np.multiply(test_inputs, 1.0 / 255)
 
@@ -315,7 +325,7 @@ def train():
 
                     test_segmentation = sess.run(network.segmentation_result, feed_dict={
                         network.inputs: np.reshape(test_inputs,
-                                                   [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, 1])})
+                                                   [n_examples, network.IMAGE_HEIGHT, network.IMAGE_WIDTH, network.IMAGE_CHANNELS])})
 
                     # Prepare the plot
                     test_plot_buf = draw_results(test_inputs, test_targets, test_segmentation, test_accuracy, network,
@@ -339,4 +349,15 @@ def train():
 
 
 if __name__ == '__main__':
+    
+    #set gpu NO.
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+    import tensorflow as tf
+    from keras.backend.tensorflow_backend import set_session
+    config0 = tf.ConfigProto()
+    config0.gpu_options.per_process_gpu_memory_fraction = 1
+    set_session(tf.Session(config=config0))
+
+
     train()
